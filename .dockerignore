@@ -1,0 +1,39 @@
+# VCS
+.git/
+.gitignore
+
+# Python caches/artifacts
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
+**/*.pyd
+*.egg-info/
+.eggs/
+
+# Local environments
+venv/
+.venv/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Test and cache outputs
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets / env files
+.env
+.env.*
+!.env.example
+
+# Large/local-only data files
+test.csv
+backend/test.csv
+
+# Docs / meta not needed in image
+README.md
