@@ -1,5 +1,3 @@
-"""Travel planner dataset model."""
-
 from sqlalchemy import Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -7,8 +5,6 @@ from core.database import Base
 
 
 class TravelPlanner(Base):
-    """Seed dataset loaded from test.csv."""
-
     __tablename__ = "travel_planner"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

@@ -1,5 +1,3 @@
-"""Approval endpoints."""
-
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -7,9 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
-from core.security import get_current_user
+from core.security import get_current_admin
 from models.approval import ApprovalRequest
-from models.enums import ApprovalStatus, QueryStatus, UserRole
+from models.enums import ApprovalStatus, QueryStatus
 from models.query_request import QueryRequest
 from models.user import User
 from schemas.approval import ApprovalDecisionIn, ApprovalOut
@@ -18,10 +16,7 @@ router = APIRouter(prefix="/approvals", tags=["approvals"])
 
 
 @router.get("/pending", response_model=list[ApprovalOut])
-async def list_pending(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)) -> list[ApprovalOut]:
-    if current.role != UserRole.ADMIN:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
-
+async def list_pending(db: AsyncSession = Depends(get_db), _: User = Depends(get_current_admin)) -> list[ApprovalOut]:
     rows = await db.execute(select(ApprovalRequest).where(ApprovalRequest.status == ApprovalStatus.PENDING))
     approvals = rows.scalars().all()
     return [
@@ -43,11 +38,8 @@ async def list_pending(db: AsyncSession = Depends(get_db), current: User = Depen
 async def decide_approval(
     payload: ApprovalDecisionIn,
     db: AsyncSession = Depends(get_db),
-    current: User = Depends(get_current_user),
+    current: User = Depends(get_current_admin),
 ) -> ApprovalOut:
-    if current.role != UserRole.ADMIN:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
-
     row = await db.execute(select(ApprovalRequest).where(ApprovalRequest.query_request_id == payload.query_request_id))
     approval = row.scalar_one_or_none()
     if not approval:

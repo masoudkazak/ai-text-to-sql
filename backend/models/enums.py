@@ -1,5 +1,3 @@
-"""Common enums."""
-
 from enum import Enum
 
 

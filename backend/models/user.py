@@ -1,5 +1,3 @@
-"""User model."""
-
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Enum, Integer, String
@@ -11,8 +9,6 @@ from models.enums import UserRole
 
 
 class User(Base):
-    """Application user."""
-
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

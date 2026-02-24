@@ -34,3 +34,18 @@ if st.button("Submit Query") and text.strip():
             st.dataframe(data["result"], use_container_width=True)
     else:
         st.error(response.text)
+
+st.divider()
+st.subheader("Check Existing Request")
+request_id = st.number_input("Query Request ID", min_value=1, step=1)
+if st.button("Check Status / Fetch Result"):
+    client = APIClient(st.session_state.get("cookie", {}))
+    response = run(client.request("GET", f"/api/v1/query/{int(request_id)}"))
+    if response.status_code == 200:
+        data = response.json()
+        st.write(f"Status: {data['status']}")
+        st.code(data["generated_sql"], language="sql")
+        if data.get("result") is not None:
+            st.dataframe(data["result"], use_container_width=True)
+    else:
+        st.error(response.text)

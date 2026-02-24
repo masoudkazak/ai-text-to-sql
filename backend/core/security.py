@@ -1,5 +1,3 @@
-"""Security helpers for password and JWT cookie auth."""
-
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -11,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.database import get_db
+from models.enums import UserRole
 from models.user import User
 
 pwd_context = CryptContext(
@@ -20,24 +19,17 @@ pwd_context = CryptContext(
 
 
 def hash_password(password: str) -> str:
-    """Hash plaintext password."""
-
     return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify plaintext against hash."""
-
     try:
         return pwd_context.verify(plain_password, hashed_password)
     except ValueError:
-        # bcrypt rejects passwords longer than 72 bytes; treat as invalid.
         return False
 
 
 def create_access_token(subject: str, role: str, allowed_tables: list[str]) -> str:
-    """Create signed JWT."""
-
     expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     exp = datetime.now(timezone.utc) + expires_delta
     payload: dict[str, Any] = {"sub": subject, "role": role, "allowed_tables": allowed_tables, "exp": exp}
@@ -45,8 +37,6 @@ def create_access_token(subject: str, role: str, allowed_tables: list[str]) -> s
 
 
 def decode_token(token: str) -> dict[str, Any]:
-    """Decode and validate JWT."""
-
     try:
         return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
     except JWTError as exc:
@@ -54,8 +44,6 @@ def decode_token(token: str) -> dict[str, Any]:
 
 
 def set_auth_cookie(response: Response, token: str) -> None:
-    """Set HttpOnly auth cookie."""
-
     response.set_cookie(
         key=settings.JWT_COOKIE_NAME,
         value=token,
@@ -66,8 +54,6 @@ def set_auth_cookie(response: Response, token: str) -> None:
 
 
 def clear_auth_cookie(response: Response) -> None:
-    """Clear auth cookie."""
-
     response.delete_cookie(settings.JWT_COOKIE_NAME)
 
 
@@ -75,8 +61,6 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
     token: str | None = Cookie(default=None, alias=settings.JWT_COOKIE_NAME),
 ) -> User:
-    """Resolve current authenticated user from cookie JWT."""
-
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
@@ -93,12 +77,7 @@ async def get_current_user(
     return user
 
 
-def require_roles(*roles: str):
-    """Role-check dependency factory."""
-
-    async def _checker(user: User = Depends(get_current_user)) -> User:
-        if user.role.value not in roles:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
-        return user
-
-    return _checker
+async def get_current_admin(user: User = Depends(get_current_user)) -> User:
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    return user

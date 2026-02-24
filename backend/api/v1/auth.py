@@ -1,5 +1,3 @@
-"""Authentication endpoints."""
-
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,8 +12,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=UserOut)
 async def login(payload: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)) -> UserOut:
-    """Login and set JWT cookie."""
-
     result = await db.execute(select(User).where(User.email == payload.email, User.is_active.is_(True)))
     user = result.scalar_one_or_none()
     if not user or not verify_password(payload.password, user.hashed_password):
@@ -28,14 +24,10 @@ async def login(payload: LoginRequest, response: Response, db: AsyncSession = De
 
 @router.post("/logout")
 async def logout(response: Response) -> dict[str, str]:
-    """Logout and clear JWT cookie."""
-
     clear_auth_cookie(response)
     return {"message": "Logged out"}
 
 
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)) -> UserOut:
-    """Return currently logged-in user."""
-
     return UserOut.model_validate(user)

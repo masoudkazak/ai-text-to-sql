@@ -1,5 +1,3 @@
-"""Query request model."""
-
 from datetime import datetime
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
@@ -11,8 +9,6 @@ from models.enums import GovernanceDecisionType, QueryStatus
 
 
 class QueryRequest(Base):
-    """Text to SQL request."""
-
     __tablename__ = "query_requests"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

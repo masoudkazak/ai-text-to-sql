@@ -4,6 +4,33 @@ This project is a secure gateway between natural language and a database: users 
 
 project with FastAPI + PostgreSQL + Redis + Streamlit for text-to-SQL with governance and approval workflow.
 
+```mermaid
+flowchart TD
+    A["Streamlit UI<br>(Frontend / User Interface)"]
+
+    subgraph backend["FastAPI Backend"]
+        B1["Authentication & Authorization"]
+        B2["Query API Endpoints"]
+        B3["Approval Workflow"]
+        B4["Audit Logging"]
+
+        subgraph services["Services Layer"]
+            S1["LLMService<br>(Text-to-SQL)"]
+            S2["SQLAnalyzer<br>(Risk Analysis)"]
+            S3["GovernanceEngine<br>(Decision Engine)"]
+            S4["QueryExecutor<br>(Execution Layer)"]
+            S5["AuditService<br>(Logging & Traceability)"]
+        end
+    end
+
+    C[("PostgreSQL<br>Persistent Storage")]
+    D[("Redis<br>Caching Layer")]
+
+    A --> B2
+    B2 --> C
+    B2 --> D
+```
+
 ## Run
 
 ```bash

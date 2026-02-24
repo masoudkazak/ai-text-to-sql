@@ -1,5 +1,3 @@
-"""Safe query execution utilities."""
-
 from __future__ import annotations
 
 import re
@@ -19,8 +17,6 @@ class QueryExecutionError(Exception):
 
 
 class QueryExecutor:
-    """Execute generated SQL with constraints."""
-
     def _apply_limit(self, sql: str) -> str:
         if sql.strip().upper().startswith("SELECT") and "LIMIT" not in sql.upper():
             return f"{sql.rstrip(';')} LIMIT {settings.MAX_RESULT_ROWS}"
@@ -31,8 +27,6 @@ class QueryExecutor:
         return sql, {name: None for name in placeholders}
 
     async def execute(self, db: AsyncSession, sql: str) -> tuple[list[dict[str, Any]], int, int]:
-        """Execute SQL and return rows/count/time_ms."""
-
         sql_limited = self._apply_limit(sql)
         sql_safe, params = self._sanitize_params(sql_limited)
 

@@ -1,5 +1,3 @@
-"""Async SQLAlchemy setup."""
-
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -17,7 +15,5 @@ SessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_co
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Yield async db session."""
-
     async with SessionLocal() as session:
         yield session

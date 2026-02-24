@@ -1,5 +1,3 @@
-"""Idempotent seed script for users and travel_planner."""
-
 from __future__ import annotations
 
 import csv
@@ -23,8 +21,6 @@ DEFAULT_LIMITS = {
 
 
 async def seed_if_needed() -> None:
-    """Create tables and seed default records once."""
-
     async with engine.begin() as conn:
         await conn.run_sync(User.metadata.create_all)
         await conn.run_sync(QueryRequest.metadata.create_all)

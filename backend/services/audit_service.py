@@ -1,13 +1,9 @@
-"""Audit event writer."""
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.audit_log import AuditLog
 
 
 class AuditService:
-    """Persist audit logs."""
-
     async def log(
         self,
         db: AsyncSession,

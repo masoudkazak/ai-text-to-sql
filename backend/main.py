@@ -1,6 +1,5 @@
-"""FastAPI entrypoint."""
-
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,11 +8,11 @@ from api.v1 import approvals, audit, auth, query, users
 from core.config import settings
 from scripts.seed_data import seed_if_needed
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """Run startup tasks."""
-
     await seed_if_needed()
     yield
 

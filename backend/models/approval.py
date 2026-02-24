@@ -1,5 +1,3 @@
-"""Approval model."""
-
 from datetime import datetime
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
@@ -10,8 +8,6 @@ from models.enums import ApprovalStatus
 
 
 class ApprovalRequest(Base):
-    """Manual approval workflow record."""
-
     __tablename__ = "approval_requests"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

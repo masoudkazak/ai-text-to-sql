@@ -1,15 +1,9 @@
-"""Application configuration."""
-
 from functools import lru_cache
-from typing import Any
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Environment-backed settings."""
-
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
     APP_NAME: str = "Natural Language Database Gateway"
@@ -44,9 +38,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Return memoized settings."""
-
-    return Settings()  # type: ignore[arg-type]
+    return Settings()
 
 
 settings = get_settings()

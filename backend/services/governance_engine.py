@@ -1,5 +1,3 @@
-"""Governance decision engine based on role and SQL analysis."""
-
 from dataclasses import dataclass
 
 from core.config import settings
@@ -24,10 +22,11 @@ ROLE_PERMISSIONS: dict[UserRole, RoleRule] = {
 
 
 class GovernanceEngine:
-    """Evaluate query execution policy."""
-
     def decide(self, user: User, analysis: SQLAnalysis) -> GovernanceDecision:
         qtype = analysis.query_type.upper()
+        print(qtype)
+        if qtype in {"INVALID", "UNKNOWN"}:
+            return GovernanceDecision(decision="DENIED", reason="Generated SQL is invalid or unsafe", risk_level=analysis.risk_level, mask_columns=[])
 
         if qtype in {"DROP", "TRUNCATE", "ALTER"}:
             return GovernanceDecision(decision="DENIED", reason="Destructive DDL is prohibited", risk_level=analysis.risk_level, mask_columns=[])

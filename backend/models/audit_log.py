@@ -1,5 +1,3 @@
-"""Audit log model."""
-
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
@@ -10,8 +8,6 @@ from core.database import Base
 
 
 class AuditLog(Base):
-    """Immutable audit events."""
-
     __tablename__ = "audit_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

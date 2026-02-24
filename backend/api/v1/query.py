@@ -1,13 +1,13 @@
-"""Natural language query endpoint."""
-
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
 from core.security import get_current_user
-from middleware.rate_limiter import enforce_rate_limit
+from middleware.rate_limiter import enforce_ai_daily_limit, enforce_rate_limit
 from models.approval import ApprovalRequest
 from models.enums import ApprovalStatus, GovernanceDecisionType, QueryStatus, UserRole
 from models.query_request import QueryRequest
@@ -29,8 +29,6 @@ audit_service = AuditService()
 
 
 def mask_value(column: str, value: object) -> object:
-    """Mask sensitive values in result rows."""
-
     if value is None or not isinstance(value, str):
         return value
 
@@ -59,9 +57,34 @@ def apply_mask(rows: list[dict], columns: list[str]) -> list[dict]:
 
 
 async def build_schema_snapshot(_: AsyncSession) -> str:
-    """Return a concise schema hint for LLM prompt."""
-
     return "users(id,email,role), query_requests(...), approval_requests(...), audit_logs(...), travel_planner(org,dest,days,date,query,level,reference_information)"
+
+
+async def execute_query_request(
+    db: AsyncSession,
+    query_request: QueryRequest,
+    governance: GovernanceDecision,
+    user_id: int,
+    request_ip: str | None,
+) -> list[dict[str, Any]]:
+    rows, row_count, elapsed_ms = await query_executor.execute(db, query_request.generated_sql)
+    rows = apply_mask(rows, governance.mask_columns)
+
+    query_request.status = QueryStatus.EXECUTED
+    query_request.result_row_count = row_count
+    query_request.execution_time_ms = elapsed_ms
+    query_request.executed_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    await audit_service.log(
+        db,
+        user_id,
+        "EXECUTED",
+        {"row_count": row_count, "execution_time_ms": elapsed_ms, "query_request_id": query_request.id},
+        query_request.id,
+        request_ip,
+    )
+    return rows
 
 
 @router.post("", response_model=QueryResponse)
@@ -71,9 +94,8 @@ async def process_query(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> QueryResponse:
-    """Process text query with governance checks."""
-
     await enforce_rate_limit(user)
+    await enforce_ai_daily_limit()
 
     await audit_service.log(db, user.id, "QUERY_RECEIVED", {"text": payload.text}, ip_address=request.client.host if request.client else None)
 
@@ -124,21 +146,12 @@ async def process_query(
         )
 
     try:
-        rows, row_count, elapsed_ms = await query_executor.execute(db, generated_sql)
-        rows = apply_mask(rows, governance.mask_columns)
-        query_request.status = QueryStatus.EXECUTED
-        query_request.result_row_count = row_count
-        query_request.execution_time_ms = elapsed_ms
-        query_request.executed_at = datetime.now(timezone.utc)
-        await db.commit()
-
-        await audit_service.log(
-            db,
-            user.id,
-            "EXECUTED",
-            {"row_count": row_count, "execution_time_ms": elapsed_ms},
-            query_request.id,
-            request.client.host if request.client else None,
+        rows = await execute_query_request(
+            db=db,
+            query_request=query_request,
+            governance=governance,
+            user_id=user.id,
+            request_ip=request.client.host if request.client else None,
         )
 
         return QueryResponse(
@@ -155,3 +168,68 @@ async def process_query(
         await db.commit()
         await audit_service.log(db, user.id, "FAILED", {"error": str(exc)}, query_request.id, request.client.host if request.client else None)
         raise HTTPException(status_code=500, detail=f"Execution failed: {exc}") from exc
+
+
+@router.get("/{query_request_id}", response_model=QueryResponse)
+async def get_query_request_result(
+    query_request_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> QueryResponse:
+    row = await db.execute(select(QueryRequest).where(QueryRequest.id == query_request_id))
+    query_request = row.scalar_one_or_none()
+    if not query_request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Query request not found")
+
+    if query_request.user_id != user.id and user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to access this query")
+
+    analysis = sql_analyzer.analyze(query_request.generated_sql)
+    governance = GovernanceDecision(
+        decision=query_request.governance_decision.value,
+        reason=query_request.governance_reason,
+        risk_level=analysis.risk_level,
+        mask_columns=analysis.sensitive_columns_found,
+    )
+
+    if query_request.status == QueryStatus.APPROVED:
+        try:
+            rows = await execute_query_request(
+                db=db,
+                query_request=query_request,
+                governance=governance,
+                user_id=user.id,
+                request_ip=request.client.host if request.client else None,
+            )
+            return QueryResponse(
+                query_request_id=query_request.id,
+                generated_sql=query_request.generated_sql,
+                sql_analysis=analysis,
+                governance=governance,
+                status=query_request.status.value,
+                result=rows,
+                created_at=query_request.created_at,
+            )
+        except QueryExecutionError as exc:
+            query_request.status = QueryStatus.FAILED
+            await db.commit()
+            await audit_service.log(
+                db,
+                user.id,
+                "FAILED",
+                {"error": str(exc), "query_request_id": query_request.id},
+                query_request.id,
+                request.client.host if request.client else None,
+            )
+            raise HTTPException(status_code=500, detail=f"Execution failed: {exc}") from exc
+
+    return QueryResponse(
+        query_request_id=query_request.id,
+        generated_sql=query_request.generated_sql,
+        sql_analysis=analysis,
+        governance=governance,
+        status=query_request.status.value,
+        result=None,
+        created_at=query_request.created_at,
+    )
