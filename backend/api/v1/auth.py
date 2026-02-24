@@ -3,9 +3,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
-from core.security import clear_auth_cookie, create_access_token, get_current_user, set_auth_cookie, verify_password
+from core.security import clear_auth_cookie, create_access_token, get_current_user, hash_password, set_auth_cookie, verify_password
+from middleware.rate_limiter import get_global_daily_usage, get_user_daily_usage
+from models.enums import UserRole
 from models.user import User
-from schemas.user import LoginRequest, UserOut
+from schemas.user import LoginRequest, UsageSummaryOut, UserOut, UserRegister
+from services.table_service import list_non_blacklisted_tables
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -22,6 +25,32 @@ async def login(payload: LoginRequest, response: Response, db: AsyncSession = De
     return UserOut.model_validate(user)
 
 
+@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+async def register(payload: UserRegister, response: Response, db: AsyncSession = Depends(get_db)) -> UserOut:
+    if not payload.name.strip() or not payload.password.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name and password are required")
+
+    exists = await db.execute(select(User).where(User.email == payload.email))
+    if exists.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
+
+    user = User(
+        name=payload.name,
+        email=str(payload.email),
+        hashed_password=hash_password(payload.password),
+        role=UserRole.VIEWER,
+        allowed_tables=[],
+        daily_query_limit=50,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    token = create_access_token(str(user.id), user.role.value, user.allowed_tables)
+    set_auth_cookie(response, token)
+    return UserOut.model_validate(user)
+
+
 @router.post("/logout")
 async def logout(response: Response) -> dict[str, str]:
     clear_auth_cookie(response)
@@ -31,3 +60,19 @@ async def logout(response: Response) -> dict[str, str]:
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)) -> UserOut:
     return UserOut.model_validate(user)
+
+
+@router.get("/usage-summary", response_model=UsageSummaryOut)
+async def usage_summary(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)) -> UsageSummaryOut:
+    global_limit, global_used, global_remaining = await get_global_daily_usage()
+    user_limit, user_used, user_remaining = await get_user_daily_usage(user)
+    available_tables = await list_non_blacklisted_tables(db)
+    return UsageSummaryOut(
+        global_daily_limit=global_limit,
+        global_used=global_used,
+        global_remaining=global_remaining,
+        user_daily_limit=user_limit,
+        user_used=user_used,
+        user_remaining=user_remaining,
+        available_tables=available_tables,
+    )

@@ -24,7 +24,6 @@ ROLE_PERMISSIONS: dict[UserRole, RoleRule] = {
 class GovernanceEngine:
     def decide(self, user: User, analysis: SQLAnalysis) -> GovernanceDecision:
         qtype = analysis.query_type.upper()
-        print(qtype)
         if qtype in {"INVALID", "UNKNOWN"}:
             return GovernanceDecision(decision="DENIED", reason="Generated SQL is invalid or unsafe", risk_level=analysis.risk_level, mask_columns=[])
 

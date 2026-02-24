@@ -12,11 +12,11 @@ from models import ApprovalRequest, AuditLog, QueryRequest, TravelPlanner, User
 from models.enums import UserRole
 
 DEFAULT_LIMITS = {
-    UserRole.ADMIN: 500,
-    UserRole.DEVELOPER: 300,
-    UserRole.ANALYST: 200,
-    UserRole.VIEWER: 100,
-    UserRole.RESTRICTED: 50,
+    UserRole.ADMIN: 20,
+    UserRole.DEVELOPER: 12,
+    UserRole.ANALYST: 8,
+    UserRole.VIEWER: 6,
+    UserRole.RESTRICTED: 4,
 }
 
 

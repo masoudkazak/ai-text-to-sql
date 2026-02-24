@@ -14,6 +14,12 @@ class UserCreate(BaseModel):
     daily_query_limit: int = 100
 
 
+class UserRegister(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -31,3 +37,13 @@ class UserOut(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class UsageSummaryOut(BaseModel):
+    global_daily_limit: int
+    global_used: int
+    global_remaining: int
+    user_daily_limit: int
+    user_used: int
+    user_remaining: int
+    available_tables: list[str]

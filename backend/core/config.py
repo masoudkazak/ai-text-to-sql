@@ -24,10 +24,10 @@ class Settings(BaseSettings):
     QUERY_TIMEOUT_SECONDS: int = 15
 
     SENSITIVE_COLUMNS: list[str] = Field(
-        default_factory=lambda: ["password", "phone", "national_id", "credit_card", "email"]
+        default_factory=lambda: ["password", "hashed_password", "phone", "national_id", "credit_card", "email"]
     )
     BLACKLISTED_TABLES: list[str] = Field(
-        default_factory=lambda: ["users_auth", "audit_logs", "alembic_version"]
+        default_factory=lambda: ["users", "audit_logs", "alembic_version"]
     )
 
     CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["http://localhost:8501"])

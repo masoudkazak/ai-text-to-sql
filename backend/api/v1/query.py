@@ -18,6 +18,7 @@ from services.governance_engine import GovernanceEngine
 from services.llm_service import LLMService
 from services.query_executor import QueryExecutionError, QueryExecutor
 from services.sql_analyzer import SQLAnalyzer
+from services.table_service import list_non_blacklisted_tables
 
 router = APIRouter(prefix="/query", tags=["query"])
 
@@ -33,6 +34,8 @@ def mask_value(column: str, value: object) -> object:
         return value
 
     c = column.lower()
+    if "password" in c:
+        return "***MASKED***"
     if c == "phone" and len(value) >= 7:
         return f"{value[:3]}****{value[-3:]}"
     if c == "email" and "@" in value:
@@ -40,7 +43,7 @@ def mask_value(column: str, value: object) -> object:
         return f"{user[:2]}**@***.{domain.split('.')[-1]}"
     if c == "credit_card" and len(value) >= 4:
         return f"************{value[-4:]}"
-    if c in {"password", "national_id"}:
+    if c == "national_id":
         return "***MASKED***"
     return value
 
@@ -48,16 +51,18 @@ def mask_value(column: str, value: object) -> object:
 def apply_mask(rows: list[dict], columns: list[str]) -> list[dict]:
     cols = {c.lower() for c in columns}
     if not cols:
-        return rows
+        cols = set()
 
     masked: list[dict] = []
     for row in rows:
-        masked.append({k: mask_value(k, v) if k.lower() in cols else v for k, v in row.items()})
+        masked.append({k: mask_value(k, v) if (k.lower() in cols or "password" in k.lower()) else v for k, v in row.items()})
     return masked
 
 
-async def build_schema_snapshot(_: AsyncSession) -> str:
-    return "users(id,email,role), query_requests(...), approval_requests(...), audit_logs(...), travel_planner(org,dest,days,date,query,level,reference_information)"
+async def build_schema_snapshot(db: AsyncSession) -> tuple[str, list[str]]:
+    available_tables = await list_non_blacklisted_tables(db)
+    schema = ", ".join(available_tables)
+    return schema, available_tables
 
 
 async def execute_query_request(
@@ -99,8 +104,15 @@ async def process_query(
 
     await audit_service.log(db, user.id, "QUERY_RECEIVED", {"text": payload.text}, ip_address=request.client.host if request.client else None)
 
-    schema = await build_schema_snapshot(db)
-    generated_sql = await llm_service.text_to_sql(payload.text, schema=schema, allowed_tables=user.allowed_tables)
+    schema, available_tables = await build_schema_snapshot(db)
+    allowed_by_admin = {t.lower() for t in user.allowed_tables}
+    effective_allowed_tables = [t for t in available_tables if not allowed_by_admin or t.lower() in allowed_by_admin]
+    effective_schema = ", ".join(effective_allowed_tables)
+    generated_sql = await llm_service.text_to_sql(
+        payload.text,
+        schema=effective_schema or schema,
+        allowed_tables=effective_allowed_tables or available_tables,
+    )
 
     await audit_service.log(db, user.id, "SQL_GENERATED", {"sql": generated_sql}, ip_address=request.client.host if request.client else None)
 

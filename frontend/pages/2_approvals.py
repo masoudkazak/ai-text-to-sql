@@ -3,14 +3,22 @@
 import streamlit as st
 
 from utils.api_client import APIClient
-from utils.auth import run
+from utils.auth import _load_persisted_access_token, restore_session, run
+from utils.ui import handle_api_response, redirect_to_register, render_usage_header
 
 st.title("Approvals")
 
+# Restore auth if needed
+if "user" not in st.session_state:
+    token = _load_persisted_access_token()
+    if token:
+        run(restore_session())
+
 user = st.session_state.get("user")
 if not user:
-    st.warning("Please login first")
-    st.stop()
+    redirect_to_register()
+
+render_usage_header()
 
 if user["role"] != "admin":
     st.error("Only admin can access approvals")
@@ -19,8 +27,7 @@ if user["role"] != "admin":
 client = APIClient(st.session_state.get("cookie", {}))
 resp = run(client.request("GET", "/api/v1/approvals/pending"))
 
-if resp.status_code != 200:
-    st.error(resp.text)
+if not handle_api_response(resp, "خطا در دریافت درخواست‌های تایید"):
     st.stop()
 
 pending = resp.json()
@@ -40,8 +47,6 @@ else:
                     json={"query_request_id": row["query_request_id"], "approve": bool(approve), "comment": "Reviewed from Streamlit"},
                 )
             )
-            if dec.status_code == 200:
+            if handle_api_response(dec, "خطا در ذخیره تصمیم"):
                 st.success("Decision saved")
                 st.rerun()
-            else:
-                st.error(dec.text)
