@@ -1,5 +1,7 @@
 .git
 .gitignore
+node_modules
+dist
 .env
 .env.*
 __pycache__/

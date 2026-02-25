@@ -1,4 +1,0 @@
-streamlit==1.54.0
-httpx==0.28.1
-pandas==2.3.3
-extra-streamlit-components==0.1.71

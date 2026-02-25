@@ -2,11 +2,11 @@
 
 This project is a secure gateway between natural language and a database: users submit requests, an LLM converts them into SQL, and a governance engine evaluates role permissions, risk level, and security policies to decide whether each query should be executed, sent for human approval, or denied.
 
-project with FastAPI + PostgreSQL + Redis + Streamlit for text-to-SQL with governance and approval workflow.
+project with FastAPI + PostgreSQL + Redis + Svelte for text-to-SQL with governance and approval workflow.
 
 ```mermaid
 flowchart TD
-    A["Streamlit UI<br>(Frontend / User Interface)"]
+    A["Svelte UI<br>(Frontend / User Interface)"]
 
     subgraph backend["FastAPI Backend"]
         B1["Authentication & Authorization"]

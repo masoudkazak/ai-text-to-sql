@@ -31,7 +31,7 @@ class Settings(BaseSettings):
         default_factory=lambda: ["users", "audit_logs", "alembic_version"]
     )
 
-    CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["http://localhost:8501"])
+    CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["http://localhost:8501", "http://localhost:5173"])
 
     ADMIN_EMAIL: str = "admin@example.com"
     ADMIN_PASSWORD: str = "admin123"

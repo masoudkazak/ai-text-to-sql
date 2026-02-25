@@ -1,4 +1,8 @@
-#!/usr/bin/env sh
-set -eu
+#!/bin/sh
+set -e
 
-exec streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+if [ ! -d node_modules ]; then
+  npm install
+fi
+
+exec npm run dev -- --host 0.0.0.0 --port 8501
