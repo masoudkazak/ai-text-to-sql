@@ -6,7 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.v1 import approvals, audit, auth, query, users
 from core.config import settings
+from core.database import engine
 from core.redis_client import init_redis, close_redis
+from core.sqlalchemy_monitor_actions import (
+    SQLRequestMonitorMiddleware,
+    register_sql_query_listeners,
+    setup_sql_monitor_logger,
+)
 from scripts.seed_data import seed_if_needed
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
@@ -21,6 +27,11 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
+
+if settings.ENVIRONMENT.lower() == "development":
+    setup_sql_monitor_logger()
+    register_sql_query_listeners(engine)
+    app.add_middleware(SQLRequestMonitorMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
