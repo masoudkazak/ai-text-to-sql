@@ -4,12 +4,9 @@ from utils.auth import _load_persisted_access_token, check_token_validity, fetch
 
 
 def ensure_authenticated() -> bool:
-    """Check if user is authenticated, restore from cookies if needed."""
-    # First check if user is in session state
     if st.session_state.get("user"):
         return True
-    
-    # If not, try to restore from persisted token
+
     token = _load_persisted_access_token()
     if token:
         ok, _ = run(restore_session())
@@ -18,21 +15,18 @@ def ensure_authenticated() -> bool:
     return False
 
 
-def handle_api_response(response, error_message: str = "درخواست ناموفق") -> bool:
-    """Handle API response and redirect to login if token is expired."""
-    if response.status_code == 200:
+def handle_api_response(response, error_message: str = "Request failed") -> bool:
+    if 200 <= response.status_code < 300:
         return True
     
-    # Check if it's an authentication error
     if response.status_code in [401, 403]:
         st.session_state.pop("user", None)
         st.session_state.pop("cookie", None)
-        st.error("نشست شما منقضی شده است. لطفا دوباره وارد شوید.")
+        st.error("Your session has expired. Please log in again.")
         st.balloons()
         st.switch_page("pages/0_register.py")
         return False
-    
-    # Other errors
+     
     st.error(f"{error_message}: {response.text}")
     return False
 
@@ -53,7 +47,6 @@ def render_usage_header() -> None:
 
     ok, payload = run(fetch_usage_summary())
     if not ok:
-        # Token might be expired, try to restore
         if not ensure_authenticated():
             st.session_state.pop("user", None)
             st.session_state.pop("cookie", None)

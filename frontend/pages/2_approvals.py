@@ -1,5 +1,3 @@
-"""Approvals page for admin."""
-
 import streamlit as st
 
 from utils.api_client import APIClient
@@ -8,7 +6,6 @@ from utils.ui import handle_api_response, redirect_to_register, render_usage_hea
 
 st.title("Approvals")
 
-# Restore auth if needed
 if "user" not in st.session_state:
     token = _load_persisted_access_token()
     if token:
@@ -27,7 +24,7 @@ if user["role"] != "admin":
 client = APIClient(st.session_state.get("cookie", {}))
 resp = run(client.request("GET", "/api/v1/approvals/pending"))
 
-if not handle_api_response(resp, "خطا در دریافت درخواست‌های تایید"):
+if not handle_api_response(resp, "Failed to fetch approval requests"):
     st.stop()
 
 pending = resp.json()
@@ -47,6 +44,6 @@ else:
                     json={"query_request_id": row["query_request_id"], "approve": bool(approve), "comment": "Reviewed from Streamlit"},
                 )
             )
-            if handle_api_response(dec, "خطا در ذخیره تصمیم"):
+            if handle_api_response(dec, "Failed to save decision"):
                 st.success("Decision saved")
                 st.rerun()

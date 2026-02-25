@@ -1,5 +1,3 @@
-"""Query page."""
-
 import streamlit as st
 
 from utils.api_client import APIClient
@@ -8,7 +6,6 @@ from utils.ui import handle_api_response, redirect_to_register, render_usage_hea
 
 st.title("Query")
 
-# Restore auth if needed
 if "user" not in st.session_state:
     token = _load_persisted_access_token()
     if token:
@@ -26,7 +23,7 @@ if st.button("Submit Query") and text.strip():
     client = APIClient(st.session_state.get("cookie", {}))
     response = run(client.request("POST", "/api/v1/query", json={"text": text}))
 
-    if handle_api_response(response, "خطا در ارسال درخواست"):
+    if handle_api_response(response, "Failed to submit request"):
         data = response.json()
         st.code(data["generated_sql"], language="sql")
 
@@ -34,7 +31,7 @@ if st.button("Submit Query") and text.strip():
         if decision == "APPROVED":
             st.success(f"Decision: {decision}")
         elif decision == "REQUIRES_APPROVAL":
-            st.warning("Decision: REQUIRES_APPROVAL (در انتظار تایید)")
+            st.warning("Decision: REQUIRES_APPROVAL (pending approval)")
         else:
             st.error("Decision: DENIED")
 
@@ -47,7 +44,7 @@ request_id = st.number_input("Query Request ID", min_value=1, step=1)
 if st.button("Check Status / Fetch Result"):
     client = APIClient(st.session_state.get("cookie", {}))
     response = run(client.request("GET", f"/api/v1/query/{int(request_id)}"))
-    if handle_api_response(response, "خطا در دریافت درخواست"):
+    if handle_api_response(response, "Failed to fetch request"):
         data = response.json()
         st.write(f"Status: {data['status']}")
         st.code(data["generated_sql"], language="sql")
