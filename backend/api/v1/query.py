@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
@@ -59,10 +59,30 @@ def apply_mask(rows: list[dict], columns: list[str]) -> list[dict]:
     return masked
 
 
-async def build_schema_snapshot(db: AsyncSession) -> tuple[str, list[str]]:
+async def build_schema_snapshot(db: AsyncSession) -> tuple[str, list[str], dict[str, list[str]]]:
     available_tables = await list_non_blacklisted_tables(db)
-    schema = ", ".join(available_tables)
-    return schema, available_tables
+    if not available_tables:
+        return "", [], {}
+
+    result = await db.execute(
+        text(
+            """
+            SELECT table_name, column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+            ORDER BY table_name, ordinal_position
+            """
+        )
+    )
+    table_columns: dict[str, list[str]] = {table: [] for table in available_tables}
+    for row in result.mappings():
+        table_name = row["table_name"]
+        column_name = row["column_name"]
+        if table_name in table_columns and column_name:
+            table_columns[table_name].append(column_name)
+
+    schema = "; ".join(f"{table}({', '.join(columns)})" for table, columns in table_columns.items())
+    return schema, available_tables, table_columns
 
 
 async def execute_query_request(
@@ -104,10 +124,12 @@ async def process_query(
 
     await audit_service.log(db, user.id, "QUERY_RECEIVED", {"text": payload.text}, ip_address=request.client.host if request.client else None)
 
-    schema, available_tables = await build_schema_snapshot(db)
+    schema, available_tables, table_columns = await build_schema_snapshot(db)
     allowed_by_admin = {t.lower() for t in user.allowed_tables}
     effective_allowed_tables = [t for t in available_tables if not allowed_by_admin or t.lower() in allowed_by_admin]
-    effective_schema = ", ".join(effective_allowed_tables)
+    effective_schema = "; ".join(
+        f"{table}({', '.join(table_columns.get(table, []))})" for table in effective_allowed_tables
+    )
     generated_sql = await llm_service.text_to_sql(
         payload.text,
         schema=effective_schema or schema,
@@ -134,21 +156,26 @@ async def process_query(
     db.add(query_request)
     await db.commit()
     await db.refresh(query_request)
+    query_request_id = query_request.id
 
     if governance.decision == "DENIED":
         query_request.status = QueryStatus.REJECTED
         await db.commit()
-        await audit_service.log(db, user.id, "DENIED", {"reason": governance.reason}, query_request.id, request.client.host if request.client else None)
+        await audit_service.log(
+            db, user.id, "DENIED", {"reason": governance.reason}, query_request_id, request.client.host if request.client else None
+        )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=governance.reason)
 
     if governance.decision == "REQUIRES_APPROVAL":
-        approval = ApprovalRequest(query_request_id=query_request.id, status=ApprovalStatus.PENDING)
+        approval = ApprovalRequest(query_request_id=query_request_id, status=ApprovalStatus.PENDING)
         db.add(approval)
         await db.commit()
-        await audit_service.log(db, user.id, "APPROVAL_REQUIRED", {"reason": governance.reason}, query_request.id, request.client.host if request.client else None)
+        await audit_service.log(
+            db, user.id, "APPROVAL_REQUIRED", {"reason": governance.reason}, query_request_id, request.client.host if request.client else None
+        )
 
         return QueryResponse(
-            query_request_id=query_request.id,
+            query_request_id=query_request_id,
             generated_sql=generated_sql,
             sql_analysis=analysis,
             governance=governance,
@@ -167,7 +194,7 @@ async def process_query(
         )
 
         return QueryResponse(
-            query_request_id=query_request.id,
+            query_request_id=query_request_id,
             generated_sql=generated_sql,
             sql_analysis=analysis,
             governance=governance,
@@ -176,9 +203,13 @@ async def process_query(
             created_at=query_request.created_at,
         )
     except QueryExecutionError as exc:
-        query_request.status = QueryStatus.FAILED
+        await db.execute(
+            update(QueryRequest)
+            .where(QueryRequest.id == query_request_id)
+            .values(status=QueryStatus.FAILED)
+        )
         await db.commit()
-        await audit_service.log(db, user.id, "FAILED", {"error": str(exc)}, query_request.id, request.client.host if request.client else None)
+        await audit_service.log(db, user.id, "FAILED", {"error": str(exc)}, query_request_id, request.client.host if request.client else None)
         raise HTTPException(status_code=500, detail=f"Execution failed: {exc}") from exc
 
 
@@ -224,14 +255,19 @@ async def get_query_request_result(
                 created_at=query_request.created_at,
             )
         except QueryExecutionError as exc:
-            query_request.status = QueryStatus.FAILED
+            query_request_id_saved = query_request.id
+            await db.execute(
+                update(QueryRequest)
+                .where(QueryRequest.id == query_request_id_saved)
+                .values(status=QueryStatus.FAILED)
+            )
             await db.commit()
             await audit_service.log(
                 db,
                 user.id,
                 "FAILED",
-                {"error": str(exc), "query_request_id": query_request.id},
-                query_request.id,
+                {"error": str(exc), "query_request_id": query_request_id_saved},
+                query_request_id_saved,
                 request.client.host if request.client else None,
             )
             raise HTTPException(status_code=500, detail=f"Execution failed: {exc}") from exc

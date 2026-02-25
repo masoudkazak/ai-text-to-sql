@@ -1,3 +1,5 @@
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +11,15 @@ from models.enums import UserRole
 from models.user import User
 from schemas.user import LoginRequest, UsageSummaryOut, UserOut, UserRegister
 from services.table_service import list_non_blacklisted_tables
+
+
+DEFAULT_LIMITS = {
+    UserRole.ADMIN: 20,
+    UserRole.DEVELOPER: 12,
+    UserRole.ANALYST: 8,
+    UserRole.VIEWER: 6,
+    UserRole.RESTRICTED: 4,
+}
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -40,7 +51,30 @@ async def register(payload: UserRegister, response: Response, db: AsyncSession =
         hashed_password=hash_password(payload.password),
         role=UserRole.VIEWER,
         allowed_tables=[],
-        daily_query_limit=50,
+        daily_query_limit=DEFAULT_LIMITS[UserRole.VIEWER],
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    token = create_access_token(str(user.id), user.role.value, user.allowed_tables)
+    set_auth_cookie(response, token)
+    return UserOut.model_validate(user)
+
+
+@router.post("/demo", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+async def demo_login(response: Response, db: AsyncSession = Depends(get_db)) -> UserOut:
+    demo_name = f"Demo User {secrets.token_hex(4).upper()}"
+    demo_email = f"demo_{secrets.token_hex(6)}@example.com"
+    demo_password = secrets.token_urlsafe(12)
+
+    user = User(
+        name=demo_name,
+        email=demo_email,
+        hashed_password=hash_password(demo_password),
+        role=UserRole.VIEWER,
+        allowed_tables=[],
+        daily_query_limit=DEFAULT_LIMITS[UserRole.VIEWER],
     )
     db.add(user)
     await db.commit()

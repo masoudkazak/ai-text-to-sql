@@ -67,6 +67,22 @@ async def register(name: str, email: str, password: str) -> tuple[bool, str]:
     return False, "No cookie returned"
 
 
+async def demo_login() -> tuple[bool, str]:
+    client = APIClient()
+    response = await client.request("POST", "/api/v1/auth/demo")
+
+    if response.status_code != 201:
+        return False, response.text
+
+    cookie = response.cookies.get("access_token")
+    if cookie:
+        st.session_state["cookie"] = {"access_token": cookie}
+        _persist_access_token(cookie)
+        st.session_state["user"] = response.json()
+        return True, "ok"
+    return False, "No cookie returned"
+
+
 async def fetch_me() -> tuple[bool, dict]:
     cookies = st.session_state.get("cookie", {})
     response = await APIClient(cookies).request("GET", "/api/v1/auth/me")
@@ -94,14 +110,12 @@ async def fetch_usage_summary() -> tuple[bool, dict]:
 
 
 async def restore_session() -> tuple[bool, dict]:
-    """Restore session from persisted token."""
     token = _load_persisted_access_token()
     if not token:
         st.session_state.pop("cookie", None)
         st.session_state.pop("user", None)
         return False, {}
 
-    # Set cookie in session state for API calls
     st.session_state["cookie"] = {"access_token": token}
     
     try:
@@ -113,7 +127,6 @@ async def restore_session() -> tuple[bool, dict]:
     except Exception:
         pass
     
-    # Token is invalid, clear everything
     st.session_state.pop("cookie", None)
     st.session_state.pop("user", None)
     _clear_persisted_access_token()
@@ -121,12 +134,10 @@ async def restore_session() -> tuple[bool, dict]:
 
 
 def init_auth_session() -> None:
-    """Initialize authentication session on app load - restore from persistent cookies."""
     if "user" not in st.session_state:
         token = _load_persisted_access_token()
         if token:
             st.session_state["cookie"] = {"access_token": token}
-            # Try to restore user immediately
             import asyncio
             try:
                 success, user = asyncio.run(restore_session())
@@ -139,7 +150,6 @@ def run(coro):
 
 
 def check_token_validity() -> bool:
-    """Check if token is still valid with backend."""
     token = _load_persisted_access_token()
     if not token:
         return False

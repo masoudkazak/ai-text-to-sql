@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 
-from core.redis_client import redis_client
+from core.redis_client import get_redis_client
 from models.user import User
 
 RATE_LIMITS = {
@@ -33,14 +33,16 @@ async def enforce_rate_limit(user: User) -> None:
     now = datetime.now(UTC)
     minute_key = _user_minute_key(user.id, now)
     day_key = _user_day_key(user.id, now)
+    
+    redis = get_redis_client()
 
-    minute_count = await redis_client.incr(minute_key)
-    day_count = await redis_client.incr(day_key)
+    minute_count = await redis.incr(minute_key)
+    day_count = await redis.incr(day_key)
 
     if minute_count == 1:
-        await redis_client.expire(minute_key, 60)
+        await redis.expire(minute_key, 60)
     if day_count == 1:
-        await redis_client.expire(day_key, 86400)
+        await redis.expire(day_key, 86400)
 
     if minute_count > limits["per_minute"] or day_count > max(1, user.daily_query_limit):
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded")
@@ -49,10 +51,11 @@ async def enforce_rate_limit(user: User) -> None:
 async def enforce_ai_daily_limit() -> None:
     now = datetime.now(UTC)
     day_key = _global_day_key(now)
-    count = await redis_client.incr(day_key)
+    redis = get_redis_client()
+    count = await redis.incr(day_key)
 
     if count == 1:
-        await redis_client.expire(day_key, 86400)
+        await redis.expire(day_key, 86400)
 
     if count > AI_DAILY_LIMIT_UTC:
         raise HTTPException(
@@ -64,7 +67,8 @@ async def enforce_ai_daily_limit() -> None:
 async def get_user_daily_usage(user: User) -> tuple[int, int, int]:
     now = datetime.now(UTC)
     day_key = _user_day_key(user.id, now)
-    used = int(await redis_client.get(day_key) or 0)
+    redis = get_redis_client()
+    used = int(await redis.get(day_key) or 0)
     limit = max(1, user.daily_query_limit)
     remaining = max(0, limit - used)
     return limit, used, remaining
@@ -73,6 +77,7 @@ async def get_user_daily_usage(user: User) -> tuple[int, int, int]:
 async def get_global_daily_usage() -> tuple[int, int, int]:
     now = datetime.now(UTC)
     day_key = _global_day_key(now)
-    used = int(await redis_client.get(day_key) or 0)
+    redis = get_redis_client()
+    used = int(await redis.get(day_key) or 0)
     remaining = max(0, AI_DAILY_LIMIT_UTC - used)
     return AI_DAILY_LIMIT_UTC, used, remaining
