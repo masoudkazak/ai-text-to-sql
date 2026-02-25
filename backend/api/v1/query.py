@@ -73,7 +73,6 @@ async def process_query(
     )
     db.add(query_request)
     await db.commit()
-    await db.refresh(query_request)
     query_request_id = query_request.id
 
     if governance.decision == "DENIED":

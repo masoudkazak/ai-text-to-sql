@@ -1,13 +1,25 @@
 from datetime import datetime, timezone
+import asyncio
+import time
 from typing import Any
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from models.enums import QueryStatus
 from models.query_request import QueryRequest
 from services.audit_service import AuditService
 from services.query_executor import QueryExecutor
-from services.table_service import list_non_blacklisted_tables
+
+_SCHEMA_CACHE_TTL_SECONDS = 600.0
+_schema_cache_lock = asyncio.Lock()
+_schema_cache: dict[str, Any] = {
+    "expires_at": 0.0,
+    "schema": "",
+    "tables": [],
+    "table_columns": {},
+}
 
 
 def mask_value(column: str, value: object) -> object:
@@ -41,31 +53,53 @@ def apply_mask(rows: list[dict], columns: list[str]) -> list[dict]:
 
 
 async def build_schema_snapshot(db: AsyncSession) -> tuple[str, list[str], dict[str, list[str]]]:
-    from sqlalchemy import select, text
-    
-    available_tables = await list_non_blacklisted_tables(db)
-    if not available_tables:
-        return "", [], {}
+    now = time.monotonic()
+    if _schema_cache["expires_at"] > now:
+        return _schema_cache["schema"], list(_schema_cache["tables"]), dict(_schema_cache["table_columns"])
 
-    result = await db.execute(
-        text(
-            """
-            SELECT table_name, column_name
-            FROM information_schema.columns
-            WHERE table_schema = 'public'
-            ORDER BY table_name, ordinal_position
-            """
+    async with _schema_cache_lock:
+        now = time.monotonic()
+        if _schema_cache["expires_at"] > now:
+            return _schema_cache["schema"], list(_schema_cache["tables"]), dict(_schema_cache["table_columns"])
+
+        result = await db.execute(
+            text(
+                """
+                SELECT t.table_name, c.column_name
+                FROM information_schema.tables AS t
+                LEFT JOIN information_schema.columns AS c
+                    ON c.table_schema = t.table_schema
+                   AND c.table_name = t.table_name
+                WHERE t.table_schema = 'public'
+                  AND t.table_type = 'BASE TABLE'
+                ORDER BY t.table_name, c.ordinal_position
+                """
+            )
         )
-    )
-    table_columns: dict[str, list[str]] = {table: [] for table in available_tables}
-    for row in result.mappings():
-        table_name = row["table_name"]
-        column_name = row["column_name"]
-        if table_name in table_columns and column_name:
-            table_columns[table_name].append(column_name)
+        blacklisted = {t.lower() for t in settings.BLACKLISTED_TABLES}
+        table_columns: dict[str, list[str]] = {}
 
-    schema = "; ".join(f"{table}({', '.join(columns)})" for table, columns in table_columns.items())
-    return schema, available_tables, table_columns
+        for row in result.mappings():
+            table_name = row["table_name"]
+            if not table_name or table_name.lower() in blacklisted:
+                continue
+
+            if table_name not in table_columns:
+                table_columns[table_name] = []
+
+            column_name = row["column_name"]
+            if column_name:
+                table_columns[table_name].append(column_name)
+
+        available_tables = sorted(table_columns.keys())
+        schema = "; ".join(f"{table}({', '.join(table_columns[table])})" for table in available_tables)
+
+        _schema_cache["schema"] = schema
+        _schema_cache["tables"] = available_tables
+        _schema_cache["table_columns"] = table_columns
+        _schema_cache["expires_at"] = now + _SCHEMA_CACHE_TTL_SECONDS
+
+        return schema, list(available_tables), dict(table_columns)
 
 
 async def execute_query_request(

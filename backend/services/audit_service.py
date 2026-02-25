@@ -22,5 +22,4 @@ class AuditService:
         )
         db.add(log)
         await db.commit()
-        await db.refresh(log)
         return log
