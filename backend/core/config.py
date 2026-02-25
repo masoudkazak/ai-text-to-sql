@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     APP_NAME: str = "Natural Language Database Gateway"
     API_V1_PREFIX: str = "/api/v1"
+    ENVIRONMENT: str = "development"
 
     DATABASE_URL: str = "postgresql+asyncpg://user:pass@postgres:5432/nldb"
     REDIS_URL: str = "redis://redis:6379/0"

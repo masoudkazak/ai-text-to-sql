@@ -20,4 +20,5 @@ class User(Base):
     daily_query_limit: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     queries_today: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

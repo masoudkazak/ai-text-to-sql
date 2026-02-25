@@ -1,8 +1,5 @@
-from datetime import datetime, timezone
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select, text, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
@@ -18,7 +15,8 @@ from services.governance_engine import GovernanceEngine
 from services.llm_service import LLMService
 from services.query_executor import QueryExecutionError, QueryExecutor
 from services.sql_analyzer import SQLAnalyzer
-from services.table_service import list_non_blacklisted_tables
+
+from .query_helpers import build_schema_snapshot, execute_query_request
 
 router = APIRouter(prefix="/query", tags=["query"])
 
@@ -29,89 +27,6 @@ query_executor = QueryExecutor()
 audit_service = AuditService()
 
 
-def mask_value(column: str, value: object) -> object:
-    if value is None or not isinstance(value, str):
-        return value
-
-    c = column.lower()
-    if "password" in c:
-        return "***MASKED***"
-    if c == "phone" and len(value) >= 7:
-        return f"{value[:3]}****{value[-3:]}"
-    if c == "email" and "@" in value:
-        user, _, domain = value.partition("@")
-        return f"{user[:2]}**@***.{domain.split('.')[-1]}"
-    if c == "credit_card" and len(value) >= 4:
-        return f"************{value[-4:]}"
-    if c == "national_id":
-        return "***MASKED***"
-    return value
-
-
-def apply_mask(rows: list[dict], columns: list[str]) -> list[dict]:
-    cols = {c.lower() for c in columns}
-    if not cols:
-        cols = set()
-
-    masked: list[dict] = []
-    for row in rows:
-        masked.append({k: mask_value(k, v) if (k.lower() in cols or "password" in k.lower()) else v for k, v in row.items()})
-    return masked
-
-
-async def build_schema_snapshot(db: AsyncSession) -> tuple[str, list[str], dict[str, list[str]]]:
-    available_tables = await list_non_blacklisted_tables(db)
-    if not available_tables:
-        return "", [], {}
-
-    result = await db.execute(
-        text(
-            """
-            SELECT table_name, column_name
-            FROM information_schema.columns
-            WHERE table_schema = 'public'
-            ORDER BY table_name, ordinal_position
-            """
-        )
-    )
-    table_columns: dict[str, list[str]] = {table: [] for table in available_tables}
-    for row in result.mappings():
-        table_name = row["table_name"]
-        column_name = row["column_name"]
-        if table_name in table_columns and column_name:
-            table_columns[table_name].append(column_name)
-
-    schema = "; ".join(f"{table}({', '.join(columns)})" for table, columns in table_columns.items())
-    return schema, available_tables, table_columns
-
-
-async def execute_query_request(
-    db: AsyncSession,
-    query_request: QueryRequest,
-    governance: GovernanceDecision,
-    user_id: int,
-    request_ip: str | None,
-) -> list[dict[str, Any]]:
-    rows, row_count, elapsed_ms = await query_executor.execute(db, query_request.generated_sql)
-    rows = apply_mask(rows, governance.mask_columns)
-
-    query_request.status = QueryStatus.EXECUTED
-    query_request.result_row_count = row_count
-    query_request.execution_time_ms = elapsed_ms
-    query_request.executed_at = datetime.now(timezone.utc)
-    await db.commit()
-
-    await audit_service.log(
-        db,
-        user_id,
-        "EXECUTED",
-        {"row_count": row_count, "execution_time_ms": elapsed_ms, "query_request_id": query_request.id},
-        query_request.id,
-        request_ip,
-    )
-    return rows
-
-
 @router.post("", response_model=QueryResponse)
 async def process_query(
     payload: QueryInput,
@@ -119,10 +34,13 @@ async def process_query(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> QueryResponse:
-    await enforce_rate_limit(user)
+    user_id = user.id
+    request_ip = request.client.host if request.client else None
+
+    await enforce_rate_limit(user, request_ip)
     await enforce_ai_daily_limit()
 
-    await audit_service.log(db, user.id, "QUERY_RECEIVED", {"text": payload.text}, ip_address=request.client.host if request.client else None)
+    await audit_service.log(db, user_id, "QUERY_RECEIVED", {"text": payload.text}, ip_address=request_ip)
 
     schema, available_tables, table_columns = await build_schema_snapshot(db)
     allowed_by_admin = {t.lower() for t in user.allowed_tables}
@@ -136,7 +54,7 @@ async def process_query(
         allowed_tables=effective_allowed_tables or available_tables,
     )
 
-    await audit_service.log(db, user.id, "SQL_GENERATED", {"sql": generated_sql}, ip_address=request.client.host if request.client else None)
+    await audit_service.log(db, user_id, "SQL_GENERATED", {"sql": generated_sql}, ip_address=request_ip)
 
     analysis = sql_analyzer.analyze(generated_sql)
     governance: GovernanceDecision = governance_engine.decide(user, analysis)
@@ -145,7 +63,7 @@ async def process_query(
         generated_sql = generated_sql.rstrip(";") + " LIMIT 100"
 
     query_request = QueryRequest(
-        user_id=user.id,
+        user_id=user_id,
         original_text=payload.text,
         generated_sql=generated_sql,
         sql_analysis=analysis.model_dump(),
@@ -162,7 +80,7 @@ async def process_query(
         query_request.status = QueryStatus.REJECTED
         await db.commit()
         await audit_service.log(
-            db, user.id, "DENIED", {"reason": governance.reason}, query_request_id, request.client.host if request.client else None
+            db, user_id, "DENIED", {"reason": governance.reason}, query_request_id, request_ip
         )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=governance.reason)
 
@@ -171,7 +89,7 @@ async def process_query(
         db.add(approval)
         await db.commit()
         await audit_service.log(
-            db, user.id, "APPROVAL_REQUIRED", {"reason": governance.reason}, query_request_id, request.client.host if request.client else None
+            db, user_id, "APPROVAL_REQUIRED", {"reason": governance.reason}, query_request_id, request_ip
         )
 
         return QueryResponse(
@@ -188,9 +106,11 @@ async def process_query(
         rows = await execute_query_request(
             db=db,
             query_request=query_request,
-            governance=governance,
-            user_id=user.id,
-            request_ip=request.client.host if request.client else None,
+            governance_mask_columns=governance.mask_columns,
+            user_id=user_id,
+            request_ip=request_ip,
+            query_executor=query_executor,
+            audit_service=audit_service,
         )
 
         return QueryResponse(
@@ -209,8 +129,8 @@ async def process_query(
             .values(status=QueryStatus.FAILED)
         )
         await db.commit()
-        await audit_service.log(db, user.id, "FAILED", {"error": str(exc)}, query_request_id, request.client.host if request.client else None)
-        raise HTTPException(status_code=500, detail=f"Execution failed: {exc}") from exc
+        await audit_service.log(db, user_id, "FAILED", {"error": str(exc)}, query_request_id, request_ip)
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @router.get("/{query_request_id}", response_model=QueryResponse)
@@ -220,6 +140,9 @@ async def get_query_request_result(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> QueryResponse:
+    user_id = user.id
+    request_ip = request.client.host if request.client else None
+
     row = await db.execute(select(QueryRequest).where(QueryRequest.id == query_request_id))
     query_request = row.scalar_one_or_none()
     if not query_request:
@@ -241,9 +164,11 @@ async def get_query_request_result(
             rows = await execute_query_request(
                 db=db,
                 query_request=query_request,
-                governance=governance,
-                user_id=user.id,
-                request_ip=request.client.host if request.client else None,
+                governance_mask_columns=governance.mask_columns,
+                user_id=user_id,
+                request_ip=request_ip,
+                query_executor=query_executor,
+                audit_service=audit_service,
             )
             return QueryResponse(
                 query_request_id=query_request.id,
@@ -264,13 +189,13 @@ async def get_query_request_result(
             await db.commit()
             await audit_service.log(
                 db,
-                user.id,
+                user_id,
                 "FAILED",
                 {"error": str(exc), "query_request_id": query_request_id_saved},
                 query_request_id_saved,
-                request.client.host if request.client else None,
+                request_ip,
             )
-            raise HTTPException(status_code=500, detail=f"Execution failed: {exc}") from exc
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
     return QueryResponse(
         query_request_id=query_request.id,

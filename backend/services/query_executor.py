@@ -6,14 +6,17 @@ from collections.abc import Sequence
 from typing import Any
 
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import InterfaceError, OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 
 
 class QueryExecutionError(Exception):
-    """Raised when query execution fails."""
+    def __init__(self, raw_error: str, *, detail: str, status_code: int) -> None:
+        super().__init__(raw_error)
+        self.detail = detail
+        self.status_code = status_code
 
 
 class QueryExecutor:
@@ -44,4 +47,15 @@ class QueryExecutor:
             return [], result.rowcount or 0, elapsed_ms
         except SQLAlchemyError as exc:
             await db.rollback()
-            raise QueryExecutionError(str(exc)) from exc
+            if isinstance(exc, (OperationalError, InterfaceError)):
+                raise QueryExecutionError(
+                    str(exc),
+                    detail="Database is temporarily unavailable. Please try again.",
+                    status_code=503,
+                ) from exc
+
+            raise QueryExecutionError(
+                str(exc),
+                detail="Generated SQL is not valid for the current schema. Please refine your prompt and try again.",
+                status_code=422,
+            ) from exc

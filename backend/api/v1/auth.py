@@ -1,6 +1,6 @@
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,13 +37,15 @@ async def login(payload: LoginRequest, response: Response, db: AsyncSession = De
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def register(payload: UserRegister, response: Response, db: AsyncSession = Depends(get_db)) -> UserOut:
+async def register(payload: UserRegister, response: Response, request: Request, db: AsyncSession = Depends(get_db)) -> UserOut:
     if not payload.name.strip() or not payload.password.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name and password are required")
 
     exists = await db.execute(select(User).where(User.email == payload.email))
     if exists.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
+
+    client_ip = request.client.host if request.client else "unknown"
 
     user = User(
         name=payload.name,
@@ -52,6 +54,7 @@ async def register(payload: UserRegister, response: Response, db: AsyncSession =
         role=UserRole.VIEWER,
         allowed_tables=[],
         daily_query_limit=DEFAULT_LIMITS[UserRole.VIEWER],
+        ip_address=client_ip,
     )
     db.add(user)
     await db.commit()
@@ -63,7 +66,9 @@ async def register(payload: UserRegister, response: Response, db: AsyncSession =
 
 
 @router.post("/demo", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def demo_login(response: Response, db: AsyncSession = Depends(get_db)) -> UserOut:
+async def demo_login(request: Request, response: Response, db: AsyncSession = Depends(get_db)) -> UserOut:
+    client_ip = request.client.host if request.client else "unknown"
+
     demo_name = f"Demo User {secrets.token_hex(4).upper()}"
     demo_email = f"demo_{secrets.token_hex(6)}@example.com"
     demo_password = secrets.token_urlsafe(12)
@@ -75,6 +80,7 @@ async def demo_login(response: Response, db: AsyncSession = Depends(get_db)) -> 
         role=UserRole.VIEWER,
         allowed_tables=[],
         daily_query_limit=DEFAULT_LIMITS[UserRole.VIEWER],
+        ip_address=client_ip,
     )
     db.add(user)
     await db.commit()
@@ -97,9 +103,10 @@ async def me(user: User = Depends(get_current_user)) -> UserOut:
 
 
 @router.get("/usage-summary", response_model=UsageSummaryOut)
-async def usage_summary(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)) -> UsageSummaryOut:
+async def usage_summary(request: Request, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)) -> UsageSummaryOut:
+    request_ip = request.client.host if request.client else None
     global_limit, global_used, global_remaining = await get_global_daily_usage()
-    user_limit, user_used, user_remaining = await get_user_daily_usage(user)
+    user_limit, user_used, user_remaining = await get_user_daily_usage(user, request_ip)
     available_tables = await list_non_blacklisted_tables(db)
     return UsageSummaryOut(
         global_daily_limit=global_limit,
