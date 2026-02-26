@@ -33,8 +33,10 @@ flowchart TD
 
 ## Run
 
+### Development
+
 ```bash
-docker compose up --build -d
+make run
 ```
 
 Services:

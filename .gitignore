@@ -33,6 +33,7 @@ build/
 .env
 .env.*
 !.env.example
+!.env.prod.local.example
 
 # Logs
 *.log
@@ -41,3 +42,4 @@ backend/logs
 # Local runtime files
 backend/test.csv
 test.csv
+backups/

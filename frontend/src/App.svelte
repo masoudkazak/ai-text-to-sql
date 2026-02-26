@@ -297,21 +297,21 @@
 
         <article class="card">
           <h3>Login</h3>
-          <label>Email</label>
-          <input bind:value={email} type="email" placeholder="admin@example.com" />
-          <label>Password</label>
-          <input bind:value={password} type="password" placeholder="••••••••" />
+          <label for="login-email">Email</label>
+          <input id="login-email" bind:value={email} type="email" placeholder="admin@example.com" />
+          <label for="login-password">Password</label>
+          <input id="login-password" bind:value={password} type="password" placeholder="••••••••" />
           <button class="btn" disabled={loading} on:click={login}>Login</button>
         </article>
 
         <article class="card">
           <h3>Register (Viewer)</h3>
-          <label>Name</label>
-          <input bind:value={registerName} type="text" placeholder="Your name" />
-          <label>Email</label>
-          <input bind:value={registerEmail} type="email" placeholder="you@example.com" />
-          <label>Password</label>
-          <input bind:value={registerPassword} type="password" placeholder="Choose a password" />
+          <label for="register-name">Name</label>
+          <input id="register-name" bind:value={registerName} type="text" placeholder="Your name" />
+          <label for="register-email">Email</label>
+          <input id="register-email" bind:value={registerEmail} type="email" placeholder="you@example.com" />
+          <label for="register-password">Password</label>
+          <input id="register-password" bind:value={registerPassword} type="password" placeholder="Choose a password" />
           <button class="btn" disabled={loading} on:click={register}>Create Viewer Account</button>
         </article>
       </section>
@@ -345,8 +345,8 @@
       {#if activeTab === 'query'}
         <section class="card">
           <h3>Query Console</h3>
-          <label>Natural language request</label>
-          <textarea bind:value={queryText} rows="7" placeholder="Show top 10 destinations by budget in 2024"></textarea>
+          <label for="query-text">Natural language request</label>
+          <textarea id="query-text" bind:value={queryText} rows="7" placeholder="Show top 10 destinations by budget in 2024"></textarea>
           <div class="hints-container">
             <p class="hints-label">Quick Examples:</p>
             <div class="hints">
@@ -393,8 +393,8 @@
 
         <section class="card">
           <h3>Check Existing Request</h3>
-          <label>Query Request ID</label>
-          <input type="number" min="1" bind:value={requestId} />
+          <label for="request-id">Query Request ID</label>
+          <input id="request-id" type="number" min="1" bind:value={requestId} />
           <button class="btn" disabled={loading} on:click={checkRequest}>Check Status / Fetch Result</button>
 
           {#if requestResult}
@@ -495,32 +495,32 @@
           <h3>Create User</h3>
           <div class="form-grid">
             <div>
-              <label>Name</label>
-              <input bind:value={newUser.name} type="text" />
+              <label for="new-user-name">Name</label>
+              <input id="new-user-name" bind:value={newUser.name} type="text" />
             </div>
             <div>
-              <label>Email</label>
-              <input bind:value={newUser.email} type="email" />
+              <label for="new-user-email">Email</label>
+              <input id="new-user-email" bind:value={newUser.email} type="email" />
             </div>
             <div>
-              <label>Password</label>
-              <input bind:value={newUser.password} type="password" />
+              <label for="new-user-password">Password</label>
+              <input id="new-user-password" bind:value={newUser.password} type="password" />
             </div>
             <div>
-              <label>Role</label>
-              <select bind:value={newUser.role}>
+              <label for="new-user-role">Role</label>
+              <select id="new-user-role" bind:value={newUser.role}>
                 {#each roles as role}
                   <option value={role}>{role}</option>
                 {/each}
               </select>
             </div>
             <div>
-              <label>Daily Query Limit</label>
-              <input bind:value={newUser.daily_query_limit} type="number" min="0" />
+              <label for="new-user-limit">Daily Query Limit</label>
+              <input id="new-user-limit" bind:value={newUser.daily_query_limit} type="number" min="0" />
             </div>
             <div>
-              <label>Allowed Tables (comma separated)</label>
-              <input bind:value={newUser.allowed_tables} type="text" placeholder="travel_planner, bookings" />
+              <label for="new-user-tables">Allowed Tables (comma separated)</label>
+              <input id="new-user-tables" bind:value={newUser.allowed_tables} type="text" placeholder="travel_planner, bookings" />
             </div>
           </div>
           <button class="btn accent" on:click={createUser}>Create User</button>

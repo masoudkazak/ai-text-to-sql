@@ -1,4 +1,6 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const runtimeOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8000';
+const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL ?? runtimeOrigin;
+const API_BASE_URL = configuredBaseUrl.endsWith('/') ? configuredBaseUrl.slice(0, -1) : configuredBaseUrl;
 
 function toQuery(params) {
   if (!params) return '';

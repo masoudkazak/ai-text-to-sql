@@ -1,0 +1,159 @@
+services:
+  postgres:
+    image: postgres:18.1-alpine3.23
+    container_name: postgres_prod
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nldb}
+      POSTGRES_USER: ${POSTGRES_USER:-nldb_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set_POSTGRES_PASSWORD}
+    expose:
+      - "5432"
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nldb_user} -d ${POSTGRES_DB:-nldb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis_prod
+    expose:
+      - "6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  backend:
+    container_name: backend_prod
+    build:
+      context: ./backend
+      target: production
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      ENVIRONMENT: production
+      DEBUG: "false"
+      ENABLE_DOCS: "false"
+      RUN_MIGRATIONS: "1"
+      RUN_SEED_DATA: "0"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nldb_user}:${POSTGRES_PASSWORD:?set_POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nldb}
+      REDIS_URL: redis://redis:6379/0
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  frontend:
+    container_name: frontend_prod
+    build:
+      context: ./frontend
+    environment:
+      APP_ENV: production
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    expose:
+      - "8501"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8501/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  nginx:
+    image: nginx:1.29-alpine
+    container_name: nginx_prod
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  netdata:
+    image: netdata/netdata:stable
+    container_name: netdata
+    hostname: smart-query-netdata
+    ports:
+      - "127.0.0.1:19999:19999"
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor=unconfined
+    environment:
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - netdata_config:/etc/netdata
+      - netdata_lib:/var/lib/netdata
+      - netdata_cache:/var/cache/netdata
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+  redis_data:
+  netdata_config:
+  netdata_lib:
+  netdata_cache:

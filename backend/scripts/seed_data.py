@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import logging
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -18,6 +19,7 @@ DEFAULT_LIMITS = {
     UserRole.VIEWER: 6,
     UserRole.RESTRICTED: 4,
 }
+logger = logging.getLogger(__name__)
 
 
 async def seed_if_needed() -> None:
@@ -110,12 +112,13 @@ async def seed_if_needed() -> None:
                     if rows:
                         db.add_all(rows)
                         await db.commit()
-                print(f"Seeded travel_planner from {csv_path}")
+                logger.info("Seeded travel_planner from %s", csv_path)
             else:
-                print("travel_planner seed skipped: no non-empty test.csv found")
+                logger.info("travel_planner seed skipped: no non-empty test.csv found")
 
 
 if __name__ == "__main__":
     import asyncio
 
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
     asyncio.run(seed_if_needed())

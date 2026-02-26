@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import sys
 
 import asyncpg
+
+logger = logging.getLogger(__name__)
 
 
 async def wait_for_db(max_attempts: int = 60, delay_seconds: float = 1.0) -> None:
@@ -16,16 +19,17 @@ async def wait_for_db(max_attempts: int = 60, delay_seconds: float = 1.0) -> Non
         try:
             conn = await asyncpg.connect(dsn)
             await conn.close()
-            print(f"DB is ready (attempt {attempt}/{max_attempts})")
+            logger.info("DB is ready (attempt %s/%s)", attempt, max_attempts)
             return
         except Exception as exc:  # pragma: no cover
             last_error = exc
-            print(f"Waiting for DB... attempt {attempt}/{max_attempts}: {exc}")
+            logger.info("Waiting for DB... attempt %s/%s: %s", attempt, max_attempts, exc)
             await asyncio.sleep(delay_seconds)
 
-    print(f"Database did not become ready in time. Last error: {last_error}")
+    logger.error("Database did not become ready in time. Last error: %s", last_error)
     sys.exit(1)
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
     asyncio.run(wait_for_db())

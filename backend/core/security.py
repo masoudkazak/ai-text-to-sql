@@ -48,6 +48,7 @@ def set_auth_cookie(response: Response, token: str) -> None:
         key=settings.JWT_COOKIE_NAME,
         value=token,
         httponly=True,
+        secure=settings.ENVIRONMENT.lower() == "production",
         samesite="lax",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
