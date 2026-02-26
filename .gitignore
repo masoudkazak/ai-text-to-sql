@@ -36,6 +36,7 @@ build/
 
 # Logs
 *.log
+backend/logs
 
 # Local runtime files
 backend/test.csv

@@ -2,11 +2,19 @@ import re
 import logging
 
 from openai import AsyncOpenAI
+from openai import AuthenticationError
 import sqlglot
 
 from core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class LLMServiceError(Exception):
+    def __init__(self, detail: str, status_code: int = 503) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.status_code = status_code
 
 
 class LLMService:
@@ -15,7 +23,9 @@ class LLMService:
 
     async def text_to_sql(self, text: str, schema: str, allowed_tables: list[str]) -> str:
         if not settings.OPENROUTER_API_KEY:
-            return "UNSAFE_REQUEST"
+            raise LLMServiceError(
+                "AI provider is temporarily unavailable. Please try again later."
+            )
 
         system_prompt = (
             "You are an expert PostgreSQL SQL generator.\n"
@@ -33,14 +43,22 @@ class LLMService:
             "8) Output must be a single valid PostgreSQL statement.\n"
         )
 
-        resp = await self.client.chat.completions.create(
-            model=settings.OPENROUTER_MODEL,
-            temperature=0,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text},
-            ],
-        )
+        try:
+            resp = await self.client.chat.completions.create(
+                model=settings.OPENROUTER_MODEL,
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": text},
+                ],
+            )
+        except AuthenticationError as exc:
+            raise LLMServiceError(
+                "AI provider is temporarily unavailable. Please try again later."
+            ) from exc
+        except Exception as exc:
+            logger.exception("OpenRouter request failed during text_to_sql")
+            raise LLMServiceError("AI provider is temporarily unavailable. Please try again later.") from exc
         content = (resp.choices[0].message.content or "UNSAFE_REQUEST").strip()
         logger.info("LLM raw response: %s", content)
         sql = self._normalize_sql_output(content)
@@ -94,11 +112,19 @@ class LLMService:
             f"Allowed tables: {allowed_tables}\n"
             f"SQL:\n{sql}"
         )
-        resp = await self.client.chat.completions.create(
-            model=settings.OPENROUTER_MODEL,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        try:
+            resp = await self.client.chat.completions.create(
+                model=settings.OPENROUTER_MODEL,
+                temperature=0,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        except AuthenticationError as exc:
+            raise LLMServiceError(
+                "AI provider is temporarily unavailable. Please try again later."
+            ) from exc
+        except Exception as exc:
+            logger.exception("OpenRouter request failed during SQL repair")
+            raise LLMServiceError("AI provider is temporarily unavailable. Please try again later.") from exc
         content = (resp.choices[0].message.content or "").strip()
         normalized = self._normalize_sql_output(content)
         if normalized.upper() == "UNSAFE_REQUEST":

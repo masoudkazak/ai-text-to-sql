@@ -12,7 +12,7 @@ from models.user import User
 from schemas.query import GovernanceDecision, QueryInput, QueryResponse
 from services.audit_service import AuditService
 from services.governance_engine import GovernanceEngine
-from services.llm_service import LLMService
+from services.llm_service import LLMService, LLMServiceError
 from services.query_executor import QueryExecutionError, QueryExecutor
 from services.sql_analyzer import SQLAnalyzer
 
@@ -48,11 +48,15 @@ async def process_query(
     effective_schema = "; ".join(
         f"{table}({', '.join(table_columns.get(table, []))})" for table in effective_allowed_tables
     )
-    generated_sql = await llm_service.text_to_sql(
-        payload.text,
-        schema=effective_schema or schema,
-        allowed_tables=effective_allowed_tables or available_tables,
-    )
+    try:
+        generated_sql = await llm_service.text_to_sql(
+            payload.text,
+            schema=effective_schema or schema,
+            allowed_tables=effective_allowed_tables or available_tables,
+        )
+    except LLMServiceError as exc:
+        await audit_service.log(db, user_id, "LLM_ERROR", {"error": exc.detail}, None, request_ip)
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
 
     await audit_service.log(db, user_id, "SQL_GENERATED", {"sql": generated_sql}, ip_address=request_ip)
 

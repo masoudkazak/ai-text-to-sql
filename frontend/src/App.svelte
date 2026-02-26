@@ -40,8 +40,19 @@
 
   let alert = { type: '', text: '' };
 
+  const queryHints = [
+    'Show me all users',
+    'Show me 10 rows of travel planner',
+    'Count the total number of bookings',
+    'List all destinations with their budgets',
+  ];
+
   function showAlert(type, text) {
     alert = { type, text };
+  }
+
+  function insertHint(hint) {
+    queryText = hint;
   }
 
   function clearAlert() {
@@ -336,6 +347,14 @@
           <h3>Query Console</h3>
           <label>Natural language request</label>
           <textarea bind:value={queryText} rows="7" placeholder="Show top 10 destinations by budget in 2024"></textarea>
+          <div class="hints-container">
+            <p class="hints-label">Quick Examples:</p>
+            <div class="hints">
+              {#each queryHints as hint}
+                <button class="hint-btn" on:click={() => insertHint(hint)}>{hint}</button>
+              {/each}
+            </div>
+          </div>
           <button class="btn accent" disabled={loading} on:click={submitQuery}>Submit Query</button>
 
           {#if queryResult}
