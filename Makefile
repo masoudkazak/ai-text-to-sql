@@ -32,3 +32,10 @@ prod-local-logs:
 prod-local-ps:
 	[ -f .env.prod.local ] || cp .env.prod.local.example .env.prod.local
 	docker compose --env-file .env.prod.local -f docker-compose.yml -f docker-compose.local-prod.yml ps
+
+precommit-install:
+	pip install pre-commit ruff
+	pre-commit install
+
+precommit-run:
+	pre-commit run --all-files

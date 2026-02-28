@@ -58,7 +58,9 @@ async def enforce_rate_limit(user: User, client_ip: str | None = None) -> None:
         await redis.expire(day_key, 86400)
 
     if minute_count > limits["per_minute"] or day_count > limits["per_day"]:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded"
+        )
 
 
 async def enforce_ai_daily_limit() -> None:
@@ -77,17 +79,19 @@ async def enforce_ai_daily_limit() -> None:
         )
 
 
-async def get_user_daily_usage(user: User, client_ip: str | None = None) -> tuple[int, int, int]:
+async def get_user_daily_usage(
+    user: User, client_ip: str | None = None
+) -> tuple[int, int, int]:
     now = datetime.now(UTC)
     redis = get_redis_client()
-    
+
     if user.role == UserRole.VIEWER and client_ip:
         day_key = _ip_day_key(client_ip, now)
         limit = RATE_LIMITS["viewer"]["per_day"]
     else:
         day_key = _user_day_key(user.id, now)
         limit = max(1, user.daily_query_limit)
-    
+
     used = int(await redis.get(day_key) or 0)
     remaining = max(0, limit - used)
     return limit, used, remaining

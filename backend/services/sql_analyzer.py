@@ -32,8 +32,14 @@ class SQLAnalyzer:
             )
 
         sql_without_comments = re.sub(r"--[^\n]*", "", sql)
-        sql_without_comments = re.sub(r"/\*.*?\*/", "", sql_without_comments, flags=re.DOTALL)
-        injection_hits = [pattern for pattern in INJECTION_PATTERNS if re.search(pattern, sql_without_comments, flags=re.IGNORECASE)]
+        sql_without_comments = re.sub(
+            r"/\*.*?\*/", "", sql_without_comments, flags=re.DOTALL
+        )
+        injection_hits = [
+            pattern
+            for pattern in INJECTION_PATTERNS
+            if re.search(pattern, sql_without_comments, flags=re.IGNORECASE)
+        ]
 
         try:
             statements = sqlglot.parse(sql_without_comments, read="postgres")
@@ -57,7 +63,13 @@ class SQLAnalyzer:
             query_type = "TRUNCATE"
         tables = sorted({t.name for t in ast.find_all(exp.Table) if t.name})
         has_where = ast.find(exp.Where) is not None
-        sensitive_columns = sorted({c.name for c in ast.find_all(exp.Column) if c.name and c.name.lower() in SENSITIVE_COLUMN_SET})
+        sensitive_columns = sorted(
+            {
+                c.name
+                for c in ast.find_all(exp.Column)
+                if c.name and c.name.lower() in SENSITIVE_COLUMN_SET
+            }
+        )
 
         risk_level = "LOW"
         estimated_rows = "unknown"
@@ -74,7 +86,10 @@ class SQLAnalyzer:
             risk_level = "MEDIUM"
             estimated_rows = "few"
 
-        if any(t.lower() in {x.lower() for x in settings.BLACKLISTED_TABLES} for t in tables):
+        if any(
+            t.lower() in {x.lower() for x in settings.BLACKLISTED_TABLES}
+            for t in tables
+        ):
             risk_level = "CRITICAL"
 
         if sensitive_columns and risk_level not in {"CRITICAL", "HIGH"}:

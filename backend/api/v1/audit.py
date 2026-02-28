@@ -46,13 +46,13 @@ async def list_audit_logs(
     logs = result.scalars().all()
     return [
         AuditOut(
-            id=l.id,
-            user_id=l.user_id,
-            query_request_id=l.query_request_id,
-            event_type=l.event_type,
-            details=l.details,
-            ip_address=l.ip_address,
-            timestamp=l.timestamp,
+            id=log.id,
+            user_id=log.user_id,
+            query_request_id=log.query_request_id,
+            event_type=log.event_type,
+            details=log.details,
+            ip_address=log.ip_address,
+            timestamp=log.timestamp,
         )
-        for l in logs
+        for log in logs
     ]

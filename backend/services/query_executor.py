@@ -29,7 +29,9 @@ class QueryExecutor:
         placeholders = set(re.findall(r":([a-zA-Z_][a-zA-Z0-9_]*)", sql))
         return sql, {name: None for name in placeholders}
 
-    async def execute(self, db: AsyncSession, sql: str) -> tuple[list[dict[str, Any]], int, int]:
+    async def execute(
+        self, db: AsyncSession, sql: str
+    ) -> tuple[list[dict[str, Any]], int, int]:
         sql_limited = self._apply_limit(sql)
         sql_safe, params = self._sanitize_params(sql_limited)
 

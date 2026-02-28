@@ -17,8 +17,16 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=120), nullable=False),
         sa.Column("email", sa.String(length=255), nullable=False),
         sa.Column("hashed_password", sa.String(length=255), nullable=False),
-        sa.Column("role", sa.Enum("ADMIN", "ANALYST", "DEVELOPER", "VIEWER", "RESTRICTED", name="userrole"), nullable=False),
-        sa.Column("allowed_tables", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column(
+            "role",
+            sa.Enum(
+                "ADMIN", "ANALYST", "DEVELOPER", "VIEWER", "RESTRICTED", name="userrole"
+            ),
+            nullable=False,
+        ),
+        sa.Column(
+            "allowed_tables", postgresql.JSONB(astext_type=sa.Text()), nullable=False
+        ),
         sa.Column("daily_query_limit", sa.Integer(), nullable=False),
         sa.Column("queries_today", sa.Integer(), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False),
@@ -32,10 +40,29 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("original_text", sa.Text(), nullable=False),
         sa.Column("generated_sql", sa.Text(), nullable=False),
-        sa.Column("sql_analysis", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column("governance_decision", sa.Enum("APPROVED", "REQUIRES_APPROVAL", "DENIED", name="governancedecisiontype"), nullable=False),
+        sa.Column(
+            "sql_analysis", postgresql.JSONB(astext_type=sa.Text()), nullable=False
+        ),
+        sa.Column(
+            "governance_decision",
+            sa.Enum(
+                "APPROVED", "REQUIRES_APPROVAL", "DENIED", name="governancedecisiontype"
+            ),
+            nullable=False,
+        ),
         sa.Column("governance_reason", sa.String(length=500), nullable=False),
-        sa.Column("status", sa.Enum("PENDING", "APPROVED", "REJECTED", "EXECUTED", "FAILED", name="querystatus"), nullable=False),
+        sa.Column(
+            "status",
+            sa.Enum(
+                "PENDING",
+                "APPROVED",
+                "REJECTED",
+                "EXECUTED",
+                "FAILED",
+                name="querystatus",
+            ),
+            nullable=False,
+        ),
         sa.Column("result_row_count", sa.Integer()),
         sa.Column("execution_time_ms", sa.Integer()),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
@@ -45,9 +72,19 @@ def upgrade() -> None:
     op.create_table(
         "approval_requests",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("query_request_id", sa.Integer(), sa.ForeignKey("query_requests.id"), nullable=False, unique=True),
+        sa.Column(
+            "query_request_id",
+            sa.Integer(),
+            sa.ForeignKey("query_requests.id"),
+            nullable=False,
+            unique=True,
+        ),
         sa.Column("reviewer_id", sa.Integer(), sa.ForeignKey("users.id")),
-        sa.Column("status", sa.Enum("PENDING", "APPROVED", "REJECTED", name="approvalstatus"), nullable=False),
+        sa.Column(
+            "status",
+            sa.Enum("PENDING", "APPROVED", "REJECTED", name="approvalstatus"),
+            nullable=False,
+        ),
         sa.Column("reviewer_comment", sa.Text()),
         sa.Column("timeout_at", sa.DateTime(timezone=True)),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),

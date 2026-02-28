@@ -86,7 +86,10 @@ async def seed_if_needed() -> None:
                 script_path.parents[1] / "test.csv",  # /app/test.csv in container
                 Path.cwd() / "test.csv",
             ]
-            csv_path = next((p for p in candidate_paths if p.exists() and p.stat().st_size > 0), None)
+            csv_path = next(
+                (p for p in candidate_paths if p.exists() and p.stat().st_size > 0),
+                None,
+            )
             if csv_path is not None:
                 with csv_path.open("r", encoding="utf-8", newline="") as f:
                     reader = csv.DictReader(f)
@@ -100,7 +103,9 @@ async def seed_if_needed() -> None:
                                 date=row.get("date", ""),
                                 query=row.get("query", ""),
                                 level=row.get("level", ""),
-                                reference_information=row.get("reference_information", ""),
+                                reference_information=row.get(
+                                    "reference_information", ""
+                                ),
                             )
                         )
                         if len(rows) >= 1000:
@@ -120,5 +125,7 @@ async def seed_if_needed() -> None:
 if __name__ == "__main__":
     import asyncio
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s"
+    )
     asyncio.run(seed_if_needed())

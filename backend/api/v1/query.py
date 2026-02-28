@@ -40,13 +40,20 @@ async def process_query(
     await enforce_rate_limit(user, request_ip)
     await enforce_ai_daily_limit()
 
-    await audit_service.log(db, user_id, "QUERY_RECEIVED", {"text": payload.text}, ip_address=request_ip)
+    await audit_service.log(
+        db, user_id, "QUERY_RECEIVED", {"text": payload.text}, ip_address=request_ip
+    )
 
     schema, available_tables, table_columns = await build_schema_snapshot(db)
     allowed_by_admin = {t.lower() for t in user.allowed_tables}
-    effective_allowed_tables = [t for t in available_tables if not allowed_by_admin or t.lower() in allowed_by_admin]
+    effective_allowed_tables = [
+        t
+        for t in available_tables
+        if not allowed_by_admin or t.lower() in allowed_by_admin
+    ]
     effective_schema = "; ".join(
-        f"{table}({', '.join(table_columns.get(table, []))})" for table in effective_allowed_tables
+        f"{table}({', '.join(table_columns.get(table, []))})"
+        for table in effective_allowed_tables
     )
     try:
         generated_sql = await llm_service.text_to_sql(
@@ -55,15 +62,23 @@ async def process_query(
             allowed_tables=effective_allowed_tables or available_tables,
         )
     except LLMServiceError as exc:
-        await audit_service.log(db, user_id, "LLM_ERROR", {"error": exc.detail}, None, request_ip)
+        await audit_service.log(
+            db, user_id, "LLM_ERROR", {"error": exc.detail}, None, request_ip
+        )
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
 
-    await audit_service.log(db, user_id, "SQL_GENERATED", {"sql": generated_sql}, ip_address=request_ip)
+    await audit_service.log(
+        db, user_id, "SQL_GENERATED", {"sql": generated_sql}, ip_address=request_ip
+    )
 
     analysis = sql_analyzer.analyze(generated_sql)
     governance: GovernanceDecision = governance_engine.decide(user, analysis)
 
-    if user.role == UserRole.VIEWER and analysis.query_type == "SELECT" and "LIMIT" not in generated_sql.upper():
+    if (
+        user.role == UserRole.VIEWER
+        and analysis.query_type == "SELECT"
+        and "LIMIT" not in generated_sql.upper()
+    ):
         generated_sql = generated_sql.rstrip(";") + " LIMIT 100"
 
     query_request = QueryRequest(
@@ -83,16 +98,30 @@ async def process_query(
         query_request.status = QueryStatus.REJECTED
         await db.commit()
         await audit_service.log(
-            db, user_id, "DENIED", {"reason": governance.reason}, query_request_id, request_ip
+            db,
+            user_id,
+            "DENIED",
+            {"reason": governance.reason},
+            query_request_id,
+            request_ip,
         )
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=governance.reason)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=governance.reason
+        )
 
     if governance.decision == "REQUIRES_APPROVAL":
-        approval = ApprovalRequest(query_request_id=query_request_id, status=ApprovalStatus.PENDING)
+        approval = ApprovalRequest(
+            query_request_id=query_request_id, status=ApprovalStatus.PENDING
+        )
         db.add(approval)
         await db.commit()
         await audit_service.log(
-            db, user_id, "APPROVAL_REQUIRED", {"reason": governance.reason}, query_request_id, request_ip
+            db,
+            user_id,
+            "APPROVAL_REQUIRED",
+            {"reason": governance.reason},
+            query_request_id,
+            request_ip,
         )
 
         return QueryResponse(
@@ -132,7 +161,9 @@ async def process_query(
             .values(status=QueryStatus.FAILED)
         )
         await db.commit()
-        await audit_service.log(db, user_id, "FAILED", {"error": str(exc)}, query_request_id, request_ip)
+        await audit_service.log(
+            db, user_id, "FAILED", {"error": str(exc)}, query_request_id, request_ip
+        )
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
@@ -146,13 +177,20 @@ async def get_query_request_result(
     user_id = user.id
     request_ip = request.client.host if request.client else None
 
-    row = await db.execute(select(QueryRequest).where(QueryRequest.id == query_request_id))
+    row = await db.execute(
+        select(QueryRequest).where(QueryRequest.id == query_request_id)
+    )
     query_request = row.scalar_one_or_none()
     if not query_request:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Query request not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Query request not found"
+        )
 
     if query_request.user_id != user.id and user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to access this query")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not allowed to access this query",
+        )
 
     analysis = sql_analyzer.analyze(query_request.generated_sql)
     governance = GovernanceDecision(

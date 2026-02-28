@@ -43,6 +43,24 @@ Services:
 - Backend: `http://localhost:8000`
 - Frontend: `http://localhost:8501`
 
+## Pre-commit
+
+To run lint/format checks automatically before each commit:
+
+```bash
+make precommit-install
+```
+
+This installs both `pre-commit` and `ruff`, then registers git hooks.
+
+Run on all files manually:
+
+```bash
+make precommit-run
+```
+
+`pre-commit` can auto-fix files (via `ruff --fix` and `ruff format`). If it changes files, run `git add` and commit again.
+
 ## Seeded users
 - `admin@example.com / admin123`
 - `analyst@example.com / analyst123`

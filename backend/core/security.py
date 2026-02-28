@@ -32,15 +32,24 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(subject: str, role: str, allowed_tables: list[str]) -> str:
     expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     exp = datetime.now(timezone.utc) + expires_delta
-    payload: dict[str, Any] = {"sub": subject, "role": role, "allowed_tables": allowed_tables, "exp": exp}
+    payload: dict[str, Any] = {
+        "sub": subject,
+        "role": role,
+        "allowed_tables": allowed_tables,
+        "exp": exp,
+    }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
 def decode_token(token: str) -> dict[str, Any]:
     try:
-        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        return jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+        )
     except JWTError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        ) from exc
 
 
 def set_auth_cookie(response: Response, token: str) -> None:
@@ -63,17 +72,25 @@ async def get_current_user(
     token: str | None = Cookie(default=None, alias=settings.JWT_COOKIE_NAME),
 ) -> User:
     if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+        )
 
     payload = decode_token(token)
     user_id = payload.get("sub")
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject"
+        )
 
-    result = await db.execute(select(User).where(User.id == int(user_id), User.is_active.is_(True)))
+    result = await db.execute(
+        select(User).where(User.id == int(user_id), User.is_active.is_(True))
+    )
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
+        )
 
     return user
 

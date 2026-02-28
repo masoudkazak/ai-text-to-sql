@@ -47,7 +47,10 @@ if settings.ENVIRONMENT.lower() == "development":
     register_sql_query_listeners(engine)
     app.add_middleware(SQLRequestMonitorMiddleware)
 
-app.add_middleware(RequestMonitorMiddleware, slow_threshold_seconds=settings.REQUEST_SLOW_THRESHOLD_SECONDS)
+app.add_middleware(
+    RequestMonitorMiddleware,
+    slow_threshold_seconds=settings.REQUEST_SLOW_THRESHOLD_SECONDS,
+)
 
 app.add_middleware(
     CORSMiddleware,

@@ -8,7 +8,9 @@ redis_client: Redis | None = None
 
 def get_redis_client() -> Redis:
     if redis_client is None:
-        raise RuntimeError("Redis client not initialized. Make sure to initialize in app lifespan.")
+        raise RuntimeError(
+            "Redis client not initialized. Make sure to initialize in app lifespan."
+        )
     return redis_client
 
 

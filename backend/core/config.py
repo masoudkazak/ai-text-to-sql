@@ -27,7 +27,14 @@ class Settings(BaseSettings):
     QUERY_TIMEOUT_SECONDS: int = 15
 
     SENSITIVE_COLUMNS: list[str] = Field(
-        default_factory=lambda: ["password", "hashed_password", "phone", "national_id", "credit_card", "email"]
+        default_factory=lambda: [
+            "password",
+            "hashed_password",
+            "phone",
+            "national_id",
+            "credit_card",
+            "email",
+        ]
     )
     BLACKLISTED_TABLES: list[str] = Field(
         default_factory=lambda: ["users", "audit_logs", "alembic_version"]
@@ -43,9 +50,13 @@ class Settings(BaseSettings):
     def validate_production_security(self) -> "Settings":
         if self.ENVIRONMENT.lower() == "production":
             if len(self.SECRET_KEY) < 32:
-                raise ValueError("SECRET_KEY must be at least 32 characters in production")
+                raise ValueError(
+                    "SECRET_KEY must be at least 32 characters in production"
+                )
             if len(self.ADMIN_PASSWORD) < 12:
-                raise ValueError("ADMIN_PASSWORD must be at least 12 characters in production")
+                raise ValueError(
+                    "ADMIN_PASSWORD must be at least 12 characters in production"
+                )
         return self
 
 

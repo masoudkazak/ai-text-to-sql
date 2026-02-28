@@ -23,7 +23,9 @@ async def wait_for_db(max_attempts: int = 60, delay_seconds: float = 1.0) -> Non
             return
         except Exception as exc:  # pragma: no cover
             last_error = exc
-            logger.info("Waiting for DB... attempt %s/%s: %s", attempt, max_attempts, exc)
+            logger.info(
+                "Waiting for DB... attempt %s/%s: %s", attempt, max_attempts, exc
+            )
             await asyncio.sleep(delay_seconds)
 
     logger.error("Database did not become ready in time. Last error: %s", last_error)
@@ -31,5 +33,7 @@ async def wait_for_db(max_attempts: int = 60, delay_seconds: float = 1.0) -> Non
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s"
+    )
     asyncio.run(wait_for_db())

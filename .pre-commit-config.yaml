@@ -1,0 +1,14 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check --fix backend
+        entry: ruff check --fix backend/
+        language: system
+        pass_filenames: false
+
+      - id: ruff-format-check
+        name: ruff format backend
+        entry: ruff format backend/
+        language: system
+        pass_filenames: false

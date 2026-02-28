@@ -11,16 +11,24 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.get("", response_model=list[UserOut])
-async def list_users(db: AsyncSession = Depends(get_db), _: User = Depends(get_current_admin)) -> list[UserOut]:
+async def list_users(
+    db: AsyncSession = Depends(get_db), _: User = Depends(get_current_admin)
+) -> list[UserOut]:
     result = await db.execute(select(User).order_by(User.id.asc()))
     return [UserOut.model_validate(row) for row in result.scalars().all()]
 
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_admin)) -> UserOut:
+async def create_user(
+    payload: UserCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_admin),
+) -> UserOut:
     exists = await db.execute(select(User).where(User.email == payload.email))
     if exists.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Email already exists"
+        )
 
     user = User(
         name=payload.name,

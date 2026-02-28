@@ -5,7 +5,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
-from core.security import clear_auth_cookie, create_access_token, get_current_user, hash_password, set_auth_cookie, verify_password
+from core.security import (
+    clear_auth_cookie,
+    create_access_token,
+    get_current_user,
+    hash_password,
+    set_auth_cookie,
+    verify_password,
+)
 from middleware.rate_limiter import get_global_daily_usage, get_user_daily_usage
 from models.enums import UserRole
 from models.user import User
@@ -25,11 +32,17 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=UserOut)
-async def login(payload: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)) -> UserOut:
-    result = await db.execute(select(User).where(User.email == payload.email, User.is_active.is_(True)))
+async def login(
+    payload: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)
+) -> UserOut:
+    result = await db.execute(
+        select(User).where(User.email == payload.email, User.is_active.is_(True))
+    )
     user = result.scalar_one_or_none()
     if not user or not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
+        )
 
     token = create_access_token(str(user.id), user.role.value, user.allowed_tables)
     set_auth_cookie(response, token)
@@ -37,13 +50,23 @@ async def login(payload: LoginRequest, response: Response, db: AsyncSession = De
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def register(payload: UserRegister, response: Response, request: Request, db: AsyncSession = Depends(get_db)) -> UserOut:
+async def register(
+    payload: UserRegister,
+    response: Response,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> UserOut:
     if not payload.name.strip() or not payload.password.strip():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name and password are required")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Name and password are required",
+        )
 
     exists = await db.execute(select(User).where(User.email == payload.email))
     if exists.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Email already exists"
+        )
 
     client_ip = request.client.host if request.client else "unknown"
 
@@ -66,7 +89,9 @@ async def register(payload: UserRegister, response: Response, request: Request, 
 
 
 @router.post("/demo", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def demo_login(request: Request, response: Response, db: AsyncSession = Depends(get_db)) -> UserOut:
+async def demo_login(
+    request: Request, response: Response, db: AsyncSession = Depends(get_db)
+) -> UserOut:
     client_ip = request.client.host if request.client else "unknown"
 
     demo_name = f"Demo User {secrets.token_hex(4).upper()}"
@@ -103,7 +128,11 @@ async def me(user: User = Depends(get_current_user)) -> UserOut:
 
 
 @router.get("/usage-summary", response_model=UsageSummaryOut)
-async def usage_summary(request: Request, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)) -> UsageSummaryOut:
+async def usage_summary(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> UsageSummaryOut:
     request_ip = request.client.host if request.client else None
     global_limit, global_used, global_remaining = await get_global_daily_usage()
     user_limit, user_used, user_remaining = await get_user_daily_usage(user, request_ip)

@@ -30,7 +30,9 @@ class RequestSqlStats:
     queries: list[QueryExecution] = field(default_factory=list)
 
 
-_request_sql_context: ContextVar[RequestSqlStats | None] = ContextVar("request_sql_context", default=None)
+_request_sql_context: ContextVar[RequestSqlStats | None] = ContextVar(
+    "request_sql_context", default=None
+)
 _sql_logger_name = "sql_monitor"
 _listeners_registered = False
 
@@ -67,7 +69,9 @@ def setup_sql_monitor_logger(log_path: str | Path | None = None) -> logging.Logg
             backupCount=30,
             encoding="utf-8",
         )
-        logger.warning("sql_monitor log path is not writable, fallback path is %s", fallback)
+        logger.warning(
+            "sql_monitor log path is not writable, fallback path is %s", fallback
+        )
     formatter = logging.Formatter("%(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
@@ -117,7 +121,9 @@ def register_sql_query_listeners(engine: Engine | AsyncEngine) -> None:
         stats.total_queries += 1
         stats.total_sql_time_ms += duration_ms
         stats.queries.append(
-            QueryExecution(sql=sql_text, params=repr(parameters), duration_ms=duration_ms)
+            QueryExecution(
+                sql=sql_text, params=repr(parameters), duration_ms=duration_ms
+            )
         )
 
     event.listen(engine, "before_cursor_execute", before_cursor_execute)

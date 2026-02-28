@@ -19,9 +19,13 @@ class LLMServiceError(Exception):
 
 class LLMService:
     def __init__(self) -> None:
-        self.client = AsyncOpenAI(api_key=settings.OPENROUTER_API_KEY, base_url="https://openrouter.ai/api/v1")
+        self.client = AsyncOpenAI(
+            api_key=settings.OPENROUTER_API_KEY, base_url="https://openrouter.ai/api/v1"
+        )
 
-    async def text_to_sql(self, text: str, schema: str, allowed_tables: list[str]) -> str:
+    async def text_to_sql(
+        self, text: str, schema: str, allowed_tables: list[str]
+    ) -> str:
         if not settings.OPENROUTER_API_KEY:
             raise LLMServiceError(
                 "AI provider is temporarily unavailable. Please try again later."
@@ -58,7 +62,9 @@ class LLMService:
             ) from exc
         except Exception as exc:
             logger.exception("OpenRouter request failed during text_to_sql")
-            raise LLMServiceError("AI provider is temporarily unavailable. Please try again later.") from exc
+            raise LLMServiceError(
+                "AI provider is temporarily unavailable. Please try again later."
+            ) from exc
         content = (resp.choices[0].message.content or "UNSAFE_REQUEST").strip()
         logger.info("LLM raw response: %s", content)
         sql = self._normalize_sql_output(content)
@@ -69,7 +75,9 @@ class LLMService:
         if self._is_single_valid_sql(sql):
             return sql
 
-        repaired = await self._repair_sql(sql=sql, schema=schema, allowed_tables=allowed_tables)
+        repaired = await self._repair_sql(
+            sql=sql, schema=schema, allowed_tables=allowed_tables
+        )
         logger.info("LLM repaired SQL: %s", repaired)
         if repaired and self._is_single_valid_sql(repaired):
             return repaired
@@ -81,11 +89,17 @@ class LLMService:
         if content.strip().upper() == "UNSAFE_REQUEST":
             return "UNSAFE_REQUEST"
 
-        fence_match = re.search(r"```(?:sql)?\s*(.*?)```", content, flags=re.IGNORECASE | re.DOTALL)
+        fence_match = re.search(
+            r"```(?:sql)?\s*(.*?)```", content, flags=re.IGNORECASE | re.DOTALL
+        )
         if fence_match:
             return fence_match.group(1).strip()
 
-        keyword_match = re.search(r"\b(SELECT|INSERT|UPDATE|DELETE|WITH|DROP|ALTER|TRUNCATE)\b", content, flags=re.IGNORECASE)
+        keyword_match = re.search(
+            r"\b(SELECT|INSERT|UPDATE|DELETE|WITH|DROP|ALTER|TRUNCATE)\b",
+            content,
+            flags=re.IGNORECASE,
+        )
         if keyword_match:
             return content[keyword_match.start() :].strip()
 
@@ -99,7 +113,9 @@ class LLMService:
         except Exception:
             return False
 
-    async def _repair_sql(self, sql: str, schema: str, allowed_tables: list[str]) -> str | None:
+    async def _repair_sql(
+        self, sql: str, schema: str, allowed_tables: list[str]
+    ) -> str | None:
         prompt = (
             "Repair this SQL for PostgreSQL so it becomes exactly one valid statement.\n"
             "Keep the original intent.\n"
@@ -124,7 +140,9 @@ class LLMService:
             ) from exc
         except Exception as exc:
             logger.exception("OpenRouter request failed during SQL repair")
-            raise LLMServiceError("AI provider is temporarily unavailable. Please try again later.") from exc
+            raise LLMServiceError(
+                "AI provider is temporarily unavailable. Please try again later."
+            ) from exc
         content = (resp.choices[0].message.content or "").strip()
         normalized = self._normalize_sql_output(content)
         if normalized.upper() == "UNSAFE_REQUEST":

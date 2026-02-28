@@ -16,8 +16,12 @@ router = APIRouter(prefix="/approvals", tags=["approvals"])
 
 
 @router.get("/pending", response_model=list[ApprovalOut])
-async def list_pending(db: AsyncSession = Depends(get_db), _: User = Depends(get_current_admin)) -> list[ApprovalOut]:
-    rows = await db.execute(select(ApprovalRequest).where(ApprovalRequest.status == ApprovalStatus.PENDING))
+async def list_pending(
+    db: AsyncSession = Depends(get_db), _: User = Depends(get_current_admin)
+) -> list[ApprovalOut]:
+    rows = await db.execute(
+        select(ApprovalRequest).where(ApprovalRequest.status == ApprovalStatus.PENDING)
+    )
     approvals = rows.scalars().all()
     return [
         ApprovalOut(
@@ -40,23 +44,37 @@ async def decide_approval(
     db: AsyncSession = Depends(get_db),
     current: User = Depends(get_current_admin),
 ) -> ApprovalOut:
-    row = await db.execute(select(ApprovalRequest).where(ApprovalRequest.query_request_id == payload.query_request_id))
+    row = await db.execute(
+        select(ApprovalRequest).where(
+            ApprovalRequest.query_request_id == payload.query_request_id
+        )
+    )
     approval = row.scalar_one_or_none()
     if not approval:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Approval request not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Approval request not found"
+        )
 
     if approval.status != ApprovalStatus.PENDING:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Approval already decided")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Approval already decided"
+        )
 
     approval.reviewer_id = current.id
-    approval.status = ApprovalStatus.APPROVED if payload.approve else ApprovalStatus.REJECTED
+    approval.status = (
+        ApprovalStatus.APPROVED if payload.approve else ApprovalStatus.REJECTED
+    )
     approval.reviewer_comment = payload.comment
     approval.decided_at = datetime.now(timezone.utc)
 
-    query = await db.execute(select(QueryRequest).where(QueryRequest.id == approval.query_request_id))
+    query = await db.execute(
+        select(QueryRequest).where(QueryRequest.id == approval.query_request_id)
+    )
     query_request = query.scalar_one_or_none()
     if query_request:
-        query_request.status = QueryStatus.APPROVED if payload.approve else QueryStatus.REJECTED
+        query_request.status = (
+            QueryStatus.APPROVED if payload.approve else QueryStatus.REJECTED
+        )
 
     await db.commit()
 
